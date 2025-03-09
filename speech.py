@@ -51,9 +51,9 @@ class TextToSpeech:
                 if female_voice:
                     self.engine.setProperty('voice', female_voice)
             
-            # Set speech rate and volume
-            self.engine.setProperty('rate', 150)  # 150 words per minute
-            self.engine.setProperty('volume', 0.9)  # 90% volume
+            # Set speech rate and volume - adjusted for better clarity
+            self.engine.setProperty('rate', 130)  # Reduced from 150 to 130 words per minute
+            self.engine.setProperty('volume', 1.0)  # Increased from 0.9 to 1.0 (maximum volume)
             
             # Test the engine
             try:
@@ -129,13 +129,15 @@ class TextToSpeech:
         
         return cleaned_text
     
-    def speak(self, text, is_announcement=False):
+    def speak(self, text, is_announcement=False, speech_rate=None, speech_volume=None):
         """
         Convert text to speech using available methods.
         
         Args:
             text (str): The text to convert to speech
             is_announcement (bool): Whether this is a direct announcement (skip thinking part removal)
+            speech_rate (int): Optional speech rate in words per minute (80-200)
+            speech_volume (int): Optional volume level (0-200)
             
         Returns:
             bool: True if successful, False otherwise
@@ -153,16 +155,29 @@ class TextToSpeech:
                 # Remove thinking part from AI responses
                 cleaned_text = self.remove_thinking_part(text)
             
-            logger.info(f"Speaking: {cleaned_text}")
+            # Set default values if not specified
+            if speech_rate is None:
+                speech_rate = 130
+            if speech_volume is None:
+                speech_volume = 200
+            
+            # Apply range constraints
+            speech_rate = max(80, min(200, speech_rate))
+            speech_volume = max(0, min(200, speech_volume))
+            
+            logger.info(f"Speaking: '{cleaned_text[:50]}...' (rate={speech_rate}, volume={speech_volume})")
             
             # Start a new thread for speech to avoid blocking
-            threading.Thread(target=self._speak_thread, args=(cleaned_text,)).start()
+            threading.Thread(
+                target=self._speak_thread, 
+                args=(cleaned_text, speech_rate, speech_volume)
+            ).start()
             return True
         except Exception as e:
             logger.error(f"Error converting text to speech: {e}")
             return False
     
-    def _speak_thread(self, text):
+    def _speak_thread(self, text, speech_rate=130, speech_volume=200):
         """Thread function for speaking text using available methods."""
         # Try different methods in order of preference
         success = False
@@ -170,7 +185,12 @@ class TextToSpeech:
         # First try pyttsx3 if available
         if self.use_pyttsx3 and not success:
             try:
-                logger.info("Using pyttsx3 for speech")
+                logger.info(f"Using pyttsx3 for speech (rate={speech_rate}, volume={speech_volume/200})")
+                
+                # Update engine properties for this specific speech
+                self.engine.setProperty('rate', speech_rate)
+                self.engine.setProperty('volume', speech_volume / 200)  # Convert to 0-1 range
+                
                 self.engine.say(text)
                 self.engine.runAndWait()
                 success = True
@@ -181,11 +201,15 @@ class TextToSpeech:
         # If pyttsx3 failed, try espeak
         if self.use_espeak and not success:
             try:
-                logger.info("Using espeak for speech")
-                # Run espeak with the text
-                subprocess.run(['espeak', '-v', 'en+f3', '-s', '150', text], 
-                              stdout=subprocess.PIPE, 
-                              stderr=subprocess.PIPE)
+                logger.info(f"Using espeak for speech (rate={speech_rate}, volume={speech_volume})")
+                # Run espeak with the text - adjusted for better clarity
+                subprocess.run([
+                    'espeak', 
+                    '-v', 'en+f3',         # Female voice
+                    '-s', str(speech_rate), # Speech rate
+                    '-a', str(speech_volume), # Amplitude (volume)
+                    text
+                ], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
                 success = True
             except Exception as e:
                 logger.error(f"Error with espeak speech: {e}")
@@ -193,22 +217,29 @@ class TextToSpeech:
         # As a last resort, try to generate speech and play with aplay
         if self.use_aplay and not success:
             try:
-                logger.info("Using espeak + aplay for speech")
+                logger.info(f"Using espeak + aplay for speech (rate={speech_rate}, volume={speech_volume})")
                 # Create a temporary wav file
                 with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as temp_file:
                     temp_path = temp_file.name
                 
                 # Generate speech to wav file
                 try:
-                    subprocess.run(['espeak', '-v', 'en+f3', '-s', '150', 
-                                    '-w', temp_path, text],
-                                  stdout=subprocess.PIPE, 
-                                  stderr=subprocess.PIPE)
+                    subprocess.run([
+                        'espeak', 
+                        '-v', 'en+f3',          # Female voice
+                        '-s', str(speech_rate),  # Speech rate
+                        '-a', str(speech_volume), # Amplitude (volume)
+                        '-w', temp_path, 
+                        text
+                    ], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
                     
-                    # Play with aplay
-                    subprocess.run(['aplay', temp_path],
-                                 stdout=subprocess.PIPE,
-                                 stderr=subprocess.PIPE)
+                    # Play with aplay at maximum volume
+                    subprocess.run([
+                        'aplay', 
+                        '-D', 'default',  # Default audio device
+                        '--buffer-size=4096',  # Larger buffer for smoother playback
+                        temp_path
+                    ], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
                     success = True
                 finally:
                     # Clean up temp file

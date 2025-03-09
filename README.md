@@ -43,6 +43,34 @@ The web interface is designed with a Zelda-inspired theme, featuring:
 - Voice command functionality
 - Text command input
 
+## HTTPS Requirements for Voice Recording
+
+Modern browsers, especially Safari on iOS, require HTTPS for accessing the microphone for security reasons. To enable voice recording:
+
+1. **Local Development**: When running on localhost, voice recording will work without HTTPS.
+
+2. **Production Deployment**: For remote access, you must use HTTPS. Options include:
+
+   a. **Using a Reverse Proxy with SSL**: 
+      - Set up Nginx or Apache as a reverse proxy
+      - Configure SSL certificates (Let's Encrypt is free)
+      - Forward requests to the Flask application
+
+   b. **Configure Flask with SSL directly**:
+      ```python
+      if __name__ == '__main__':
+          socketio.run(app, 
+                       host='0.0.0.0', 
+                       port=5000, 
+                       ssl_context=('cert.pem', 'key.pem'))
+      ```
+
+   c. **Self-signed certificates**:
+      ```
+      openssl req -x509 -newkey rsa:4096 -nodes -out cert.pem -keyout key.pem -days 365
+      ```
+      Note: Self-signed certificates will show security warnings in browsers.
+
 ## License
 
 This project is licensed under the MIT License - see the LICENSE file for details. 

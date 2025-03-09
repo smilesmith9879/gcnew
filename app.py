@@ -79,6 +79,12 @@ streaming_thread = None
 ai_ready_announced = False  # Flag to track if we've announced AI readiness
 ai_ready_check_thread = None  # Thread for checking AI readiness
 
+# TTS settings with defaults
+tts_settings = {
+    'speech_rate': 130,
+    'speech_volume': 200
+}
+
 # Function to announce AI readiness
 def announce_ai_ready():
     global ai_ready_announced
@@ -92,7 +98,14 @@ def announce_ai_ready():
     # Speak the ready message (with is_announcement=True)
     if tts:
         try:
-            tts.speak(ready_message, is_announcement=True)
+            # Use slightly slower rate for the announcement for better clarity
+            announcement_rate = 120  # Even slower than the default 130
+            tts.speak(
+                ready_message, 
+                is_announcement=True, 
+                speech_rate=announcement_rate,
+                speech_volume=tts_settings['speech_volume']
+            )
         except Exception as e:
             logger.error(f"Error announcing AI ready via speech: {e}")
     
@@ -246,8 +259,8 @@ def handle_camera_control(data):
         # Map the values to the servo channels
         # Assuming channel 12 for horizontal and channel 13 for vertical
         # Adjust the angle mapping as needed
-        h_angle = 90 + horizontal  # Center is 90 degrees
-        v_angle = 90 + vertical    # Center is 90 degrees
+        h_angle = 80 + horizontal  # Center is 90 degrees
+        v_angle = 40 + vertical    # Center is 90 degrees
         
         # Set servo angles
         robot.set_servo_angle(9, h_angle)
@@ -365,11 +378,11 @@ def handle_voice_command(data):
             except Exception as cmd_err:
                 logger.error(f"Error executing command: {cmd_err}")
         
-        # Use text-to-speech to speak the response
+        # Use text-to-speech to speak the response with current settings
         if tts and response_text:
             try:
                 logger.info("Converting response to speech")
-                tts.speak(response_text)
+                tts.speak(response_text, speech_rate=tts_settings['speech_rate'], speech_volume=tts_settings['speech_volume'])
             except Exception as tts_err:
                 logger.error(f"Error using text-to-speech: {tts_err}")
         
@@ -432,10 +445,10 @@ def handle_text_command(data):
             except Exception as cmd_err:
                 logger.error(f"Error executing command: {cmd_err}")
         
-        # Use text-to-speech to speak the response
+        # Use text-to-speech to speak the response with current settings
         if tts and response_text:
             try:
-                tts.speak(response_text)
+                tts.speak(response_text, speech_rate=tts_settings['speech_rate'], speech_volume=tts_settings['speech_volume'])
             except Exception as tts_err:
                 logger.error(f"Error using text-to-speech: {tts_err}")
         
@@ -465,10 +478,77 @@ def handle_toggle_tts(data):
         'message': message
     })
 
+@socketio.on('update_tts_settings')
+def handle_update_tts_settings(data):
+    """Update text-to-speech settings."""
+    global tts_settings
+    
+    # Get new settings with validation
+    speech_rate = data.get('speech_rate', 130)
+    speech_volume = data.get('speech_volume', 200)
+    
+    # Apply range constraints
+    speech_rate = max(80, min(200, speech_rate))
+    speech_volume = max(0, min(200, speech_volume))
+    
+    # Update settings
+    tts_settings['speech_rate'] = speech_rate
+    tts_settings['speech_volume'] = speech_volume
+    
+    logger.info(f"Updated TTS settings: rate={speech_rate}, volume={speech_volume}")
+
+@socketio.on('get_tts_settings')
+def handle_get_tts_settings():
+    """Get current text-to-speech settings."""
+    emit('tts_settings', tts_settings)
+
+@socketio.on('test_tts')
+def handle_test_tts(data):
+    """Test text-to-speech with the given settings."""
+    if not tts:
+        emit('error', {'message': 'Text-to-speech not available'})
+        return
+    
+    # Get settings from request or use current settings
+    speech_rate = data.get('speech_rate', tts_settings['speech_rate'])
+    speech_volume = data.get('speech_volume', tts_settings['speech_volume'])
+    
+    # Apply range constraints
+    speech_rate = max(80, min(200, speech_rate))
+    speech_volume = max(0, min(200, speech_volume))
+    
+    try:
+        # Speak a test message
+        test_message = "This is a test of the text-to-speech system with the current settings."
+        tts.speak(test_message, is_announcement=True, speech_rate=speech_rate, speech_volume=speech_volume)
+        
+        emit('tts_test', {
+            'success': True,
+            'message': 'Text-to-speech test started'
+        })
+    except Exception as e:
+        logger.error(f"Error testing text-to-speech: {e}")
+        emit('error', {'message': f'Text-to-speech test error: {str(e)}'})
+
 if __name__ == '__main__':
     try:
+        # Check if SSL certificates exist
+        ssl_context = None
+        cert_file = 'cert.pem'
+        key_file = 'key.pem'
+        
+        if os.path.exists(cert_file) and os.path.exists(key_file):
+            ssl_context = (cert_file, key_file)
+            logger.info(f"SSL certificates found. Starting server with HTTPS support.")
+        else:
+            logger.info("SSL certificates not found. Starting server without HTTPS.")
+            logger.info("Note: Voice recording may not work in Safari without HTTPS.")
+            logger.info("To generate self-signed certificates:")
+            logger.info("openssl req -x509 -newkey rsa:4096 -nodes -out cert.pem -keyout key.pem -days 365")
+        
         # Start the Flask-SocketIO server
-        socketio.run(app, host='0.0.0.0', port=5000, debug=False, allow_unsafe_werkzeug=True)
+        socketio.run(app, host='0.0.0.0', port=5000, debug=False, 
+                    allow_unsafe_werkzeug=True, ssl_context=ssl_context)
     except KeyboardInterrupt:
         logger.info("Server shutting down...")
         if robot:

@@ -17,6 +17,24 @@ const chatMessages = document.getElementById('chat-messages');
 const voiceIndicator = document.getElementById('voice-indicator');
 const ttsButton = document.getElementById('tts-button');
 
+// Settings modal elements
+const settingsButton = document.getElementById('settings-button');
+const settingsModal = document.getElementById('settings-modal');
+const closeButton = document.querySelector('.close-button');
+const requestPermissionButton = document.getElementById('request-permission-button');
+const permissionStatus = document.getElementById('permission-status');
+const permissionInstructions = document.getElementById('permission-instructions');
+const connectionStatus = document.getElementById('connection-status');
+const httpsInstructions = document.getElementById('https-instructions');
+const browserInstructions = document.getElementById('browser-instructions');
+
+// TTS settings elements
+const speechRateSlider = document.getElementById('speech-rate');
+const speechRateValue = document.getElementById('speech-rate-value');
+const speechVolumeSlider = document.getElementById('speech-volume');
+const speechVolumeValue = document.getElementById('speech-volume-value');
+const testTtsButton = document.getElementById('test-tts-button');
+
 // Status elements
 const robotStatus = document.getElementById('robot-status');
 const cameraStatus = document.getElementById('camera-status');
@@ -32,6 +50,9 @@ let isRecording = false;
 let mediaRecorder = null;
 let audioChunks = [];
 let ttsEnabled = true;
+let micPermissionState = 'unknown'; // unknown, granted, denied, prompt
+let speechRate = 130; // Default speech rate
+let speechVolume = 200; // Default speech volume (max)
 
 // Initialize the application
 document.addEventListener('DOMContentLoaded', () => {
@@ -48,6 +69,15 @@ function initializeApp() {
     
     // Get initial status
     fetchStatus();
+    
+    // Check microphone permissions
+    checkMicrophonePermission();
+    
+    // Check HTTPS connection
+    checkHttpsConnection();
+    
+    // Check browser type and set instructions
+    updateBrowserInstructions();
     
     // Add placeholder image for video feed
     videoFeed.src = videoFeed.src || 'static/img/placeholder.jpg';
@@ -90,6 +120,38 @@ function setupEventListeners() {
             toggleChatMessages(false);
         }
     });
+    
+    // Settings button
+    settingsButton.addEventListener('click', openSettingsModal);
+    
+    // Close button in settings modal
+    closeButton.addEventListener('click', closeSettingsModal);
+    
+    // Close modal when clicking outside
+    window.addEventListener('click', (e) => {
+        if (e.target === settingsModal) {
+            closeSettingsModal();
+        }
+    });
+    
+    // Request permission button
+    requestPermissionButton.addEventListener('click', requestMicrophonePermission);
+    
+    // Escape key to close modal
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && settingsModal.classList.contains('active')) {
+            closeSettingsModal();
+        }
+    });
+    
+    // Speech rate slider
+    speechRateSlider.addEventListener('input', handleSpeechRateChange);
+    
+    // Speech volume slider
+    speechVolumeSlider.addEventListener('input', handleSpeechVolumeChange);
+    
+    // Test TTS button
+    testTtsButton.addEventListener('click', testTts);
 }
 
 // Set up socket events
@@ -197,6 +259,30 @@ function setupSocketEvents() {
         console.log('Stream status:', data);
         isStreaming = data.streaming;
         updateStatus('camera', isStreaming);
+    });
+    
+    // TTS settings events
+    socket.on('tts_settings', (data) => {
+        console.log('TTS settings received:', data);
+        
+        // Update UI
+        if (data.speech_rate !== undefined) {
+            speechRate = data.speech_rate;
+            speechRateSlider.value = speechRate;
+            speechRateValue.textContent = speechRate;
+        }
+        
+        if (data.speech_volume !== undefined) {
+            speechVolume = data.speech_volume;
+            speechVolumeSlider.value = speechVolume;
+            const volumePercent = Math.round((speechVolume / 200) * 100);
+            speechVolumeValue.textContent = volumePercent + '%';
+        }
+    });
+    
+    // TTS test response
+    socket.on('tts_test', (data) => {
+        console.log('TTS test response:', data);
     });
 }
 
@@ -334,9 +420,20 @@ function toggleVoiceRecording() {
     }
 }
 
-// Start voice recording
+// Start voice recording with enhanced permission handling
 function startRecording() {
     if (isRecording) return;
+    
+    // Check for secure connection
+    const isSecure = window.location.protocol === 'https:' || 
+                    window.location.hostname === 'localhost' || 
+                    window.location.hostname === '127.0.0.1';
+    
+    if (!isSecure) {
+        addMessage('system', 'Voice recording requires a secure connection (HTTPS). This is a security requirement, especially for Safari browsers.');
+        openSettingsModal(); // Show settings with HTTPS instructions
+        return;
+    }
     
     // Detect if we're on iOS Safari specifically
     const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
@@ -393,6 +490,9 @@ function startRecording() {
     // Request microphone access
     navigator.mediaDevices.getUserMedia(constraints)
         .then(stream => {
+            // Permission was granted
+            micPermissionState = 'granted';
+            
             console.log('Microphone access granted');
             isRecording = true;
             
@@ -533,13 +633,24 @@ function startRecording() {
             
             // Hide the requesting indicator
             voiceButton.classList.remove('requesting');
+            voiceButton.classList.remove('safari-mode');
             
             // Show a more user-friendly error message with instructions
             if (error.name === 'NotAllowedError' || error.name === 'PermissionDeniedError') {
+                micPermissionState = 'denied';
+                
+                // Show specific instructions for iOS
                 if (isIOS) {
-                    addMessage('system', 'Microphone access was denied. On iOS, go to Settings > Safari > Microphone and enable access for this site.');
+                    const message = 'Microphone access was denied. Please go to Settings → Safari → Camera & Microphone Access, and enable access for this site.';
+                    addMessage('system', message);
+                    
+                    // Open settings modal to show detailed instructions
+                    openSettingsModal();
                 } else {
                     addMessage('system', 'Microphone access was denied. Please check your browser settings and ensure microphone access is allowed for this site.');
+                    
+                    // Open settings modal to show detailed instructions
+                    openSettingsModal();
                 }
             } else if (error.name === 'NotFoundError' || error.name === 'DevicesNotFoundError') {
                 addMessage('system', 'No microphone found. Please connect a microphone and try again.');
@@ -547,12 +658,15 @@ function startRecording() {
                 addMessage('system', 'Could not access microphone. It may be in use by another application.');
             } else if (error.name === 'SecurityError') {
                 addMessage('system', 'Security error when accessing microphone. This site must be accessed via HTTPS.');
+                
+                // Open settings modal to show HTTPS instructions
+                openSettingsModal();
             } else {
                 addMessage('system', 'Error accessing microphone: ' + error.message);
             }
             
-            // Remove Safari mode indicator if there was an error
-            voiceButton.classList.remove('safari-mode');
+            // Update permission status in case modal is open
+            checkMicrophonePermission();
         });
 }
 
@@ -592,4 +706,276 @@ window.addEventListener('beforeunload', () => {
     if (socket) {
         socket.disconnect();
     }
-}); 
+});
+
+// Open the settings modal
+function openSettingsModal() {
+    settingsModal.classList.add('active');
+    
+    // Refresh statuses when opening modal
+    fetchStatus();
+    
+    // Refresh permission status when opening modal
+    checkMicrophonePermission();
+    checkHttpsConnection();
+    updateBrowserInstructions();
+    
+    // Get current TTS settings from server
+    socket.emit('get_tts_settings');
+}
+
+// Close the settings modal
+function closeSettingsModal() {
+    settingsModal.classList.remove('active');
+}
+
+// Check microphone permission status
+function checkMicrophonePermission() {
+    if (!navigator.permissions || !navigator.permissions.query) {
+        // Browser doesn't support permissions API
+        permissionStatus.textContent = 'Unable to check microphone permission status';
+        permissionStatus.className = 'status-warning';
+        updatePermissionInstructions('unknown');
+        return;
+    }
+    
+    navigator.permissions.query({ name: 'microphone' })
+        .then(permissionStatus => {
+            micPermissionState = permissionStatus.state;
+            
+            switch(permissionStatus.state) {
+                case 'granted':
+                    updatePermissionStatus('Microphone access is allowed', 'success');
+                    break;
+                case 'denied':
+                    updatePermissionStatus('Microphone access is blocked', 'error');
+                    break;
+                case 'prompt':
+                    updatePermissionStatus('Microphone permission not yet requested', 'warning');
+                    break;
+                default:
+                    updatePermissionStatus('Unknown permission state', 'warning');
+            }
+            
+            updatePermissionInstructions(permissionStatus.state);
+            
+            // Listen for permission changes
+            permissionStatus.onchange = function() {
+                checkMicrophonePermission();
+            };
+        })
+        .catch(error => {
+            console.error('Error checking permission:', error);
+            permissionStatus.textContent = 'Unable to check microphone permission status';
+            permissionStatus.className = 'status-warning';
+            updatePermissionInstructions('unknown');
+        });
+}
+
+// Update permission status display
+function updatePermissionStatus(message, type) {
+    permissionStatus.textContent = message;
+    permissionStatus.className = 'status-' + type;
+}
+
+// Update permission instructions based on state
+function updatePermissionInstructions(state) {
+    let instructions = '';
+    
+    switch(state) {
+        case 'granted':
+            instructions = 'You have allowed microphone access. Voice commands are enabled.';
+            requestPermissionButton.disabled = true;
+            break;
+        case 'denied':
+            instructions = `
+                <strong>Microphone access is blocked.</strong> To enable voice commands:
+                <ol>
+                    <li>Click the lock/info icon in your browser's address bar</li>
+                    <li>Look for "Microphone" permissions and change to "Allow"</li>
+                    <li>Refresh this page after changing the setting</li>
+                </ol>
+                <p>On Safari iOS: Go to Settings → Safari → Camera & Microphone Access → Find this website and allow</p>
+            `;
+            requestPermissionButton.disabled = false;
+            break;
+        case 'prompt':
+            instructions = 'Click the "Request Microphone Access" button below to enable voice commands.';
+            requestPermissionButton.disabled = false;
+            break;
+        default:
+            instructions = `
+                <strong>Your browser may require manual microphone permission.</strong>
+                <p>If voice recording doesn't work, check your browser's site settings and ensure microphone access is allowed for this site.</p>
+                <p>Click the button below to try requesting permission.</p>
+            `;
+            requestPermissionButton.disabled = false;
+    }
+    
+    permissionInstructions.innerHTML = instructions;
+}
+
+// Request microphone permission explicitly
+function requestMicrophonePermission() {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        addMessage('system', 'Your browser does not support microphone access.');
+        return;
+    }
+    
+    navigator.mediaDevices.getUserMedia({ audio: true })
+        .then(stream => {
+            // Permission granted
+            updatePermissionStatus('Microphone access is now allowed', 'success');
+            updatePermissionInstructions('granted');
+            
+            // Stop the tracks to release the microphone
+            stream.getTracks().forEach(track => track.stop());
+            
+            addMessage('system', 'Microphone access granted successfully! You can now use voice commands.');
+        })
+        .catch(error => {
+            console.error('Error requesting microphone permission:', error);
+            
+            if (error.name === 'NotAllowedError' || error.name === 'PermissionDeniedError') {
+                updatePermissionStatus('Microphone access was denied', 'error');
+                updatePermissionInstructions('denied');
+                addMessage('system', 'Microphone access was denied. Please check browser settings.');
+            } else {
+                updatePermissionStatus('Error accessing microphone', 'error');
+                addMessage('system', 'Error accessing microphone: ' + error.message);
+            }
+        });
+}
+
+// Check if connection is HTTPS
+function checkHttpsConnection() {
+    const isSecure = window.location.protocol === 'https:' || 
+                     window.location.hostname === 'localhost' || 
+                     window.location.hostname === '127.0.0.1';
+    
+    if (isSecure) {
+        connectionStatus.textContent = 'Secure connection established';
+        connectionStatus.className = 'status-success';
+        httpsInstructions.innerHTML = 'Your connection is secure. Voice recording is available.';
+    } else {
+        connectionStatus.textContent = 'Insecure connection detected';
+        connectionStatus.className = 'status-error';
+        httpsInstructions.innerHTML = `
+            <strong>Safari requires HTTPS for voice recording.</strong>
+            <p>Voice recording is disabled because this site is not accessed over HTTPS.</p>
+            <p>Please contact the administrator to enable HTTPS, or access this site with a secure URL starting with https://</p>
+        `;
+        
+        // Disable voice button if not secure
+        voiceButton.disabled = true;
+        voiceButton.title = 'Voice recording requires HTTPS';
+        voiceButton.classList.add('disabled');
+    }
+}
+
+// Update browser-specific instructions
+function updateBrowserInstructions() {
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+    const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
+    const isIOSSafari = isIOS && isSafari;
+    const isChrome = /chrome/i.test(navigator.userAgent) && !/edge|edg/i.test(navigator.userAgent);
+    const isFirefox = /firefox/i.test(navigator.userAgent);
+    const isEdge = /edge|edg/i.test(navigator.userAgent);
+    
+    let instructions = '<strong>Browser detected: ';
+    
+    if (isIOSSafari) {
+        instructions += 'Safari on iOS</strong>';
+        instructions += `
+            <ul>
+                <li>Safari on iOS requires HTTPS for microphone access</li>
+                <li>If permission was denied: Go to Settings → Safari → Camera & Microphone Access</li>
+                <li>Find this website in the list and toggle to allow microphone access</li>
+                <li>Return to this page and refresh</li>
+            </ul>
+        `;
+    } else if (isSafari) {
+        instructions += 'Safari on macOS</strong>';
+        instructions += `
+            <ul>
+                <li>Safari requires HTTPS for microphone access</li>
+                <li>Click Safari → Preferences → Websites → Microphone</li>
+                <li>Find this website and select "Allow"</li>
+            </ul>
+        `;
+    } else if (isChrome) {
+        instructions += 'Google Chrome</strong>';
+        instructions += `
+            <ul>
+                <li>Click the lock/info icon in the address bar</li>
+                <li>Select "Site settings"</li>
+                <li>Find "Microphone" and change to "Allow"</li>
+            </ul>
+        `;
+    } else if (isFirefox) {
+        instructions += 'Firefox</strong>';
+        instructions += `
+            <ul>
+                <li>Click the lock/info icon in the address bar</li>
+                <li>Click "Connection secure" → "More Information" → "Permissions"</li>
+                <li>Find "Use the Microphone" and change to "Allow"</li>
+            </ul>
+        `;
+    } else if (isEdge) {
+        instructions += 'Microsoft Edge</strong>';
+        instructions += `
+            <ul>
+                <li>Click the lock/info icon in the address bar</li>
+                <li>Select "Site permissions"</li>
+                <li>Find "Microphone" and change to "Allow"</li>
+            </ul>
+        `;
+    } else {
+        instructions += 'Other browser</strong>';
+        instructions += `
+            <ul>
+                <li>Check your browser settings to allow microphone access for this site</li>
+                <li>Look for site permissions or privacy settings in your browser menu</li>
+            </ul>
+        `;
+    }
+    
+    browserInstructions.innerHTML = instructions;
+}
+
+// Handle speech rate change
+function handleSpeechRateChange() {
+    speechRate = parseInt(speechRateSlider.value);
+    speechRateValue.textContent = speechRate;
+    
+    // Send updated settings to server
+    updateTtsSettings();
+}
+
+// Handle speech volume change
+function handleSpeechVolumeChange() {
+    speechVolume = parseInt(speechVolumeSlider.value);
+    const volumePercent = Math.round((speechVolume / 200) * 100);
+    speechVolumeValue.textContent = volumePercent + '%';
+    
+    // Send updated settings to server
+    updateTtsSettings();
+}
+
+// Test text-to-speech with current settings
+function testTts() {
+    socket.emit('test_tts', {
+        speech_rate: speechRate,
+        speech_volume: speechVolume
+    });
+    
+    addMessage('system', 'Testing text-to-speech with current settings...');
+}
+
+// Update TTS settings on server
+function updateTtsSettings() {
+    socket.emit('update_tts_settings', {
+        speech_rate: speechRate,
+        speech_volume: speechVolume
+    });
+} 

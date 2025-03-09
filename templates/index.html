@@ -15,6 +15,9 @@
             <div class="rune top-left"></div>
             <h1>AI Four-Wheel Drive Car</h1>
             <div class="rune top-right"></div>
+            <button id="settings-button" class="settings-button" title="Settings">
+                <i class="fas fa-cog"></i>
+            </button>
         </header>
 
         <!-- Main content area -->
@@ -42,24 +45,6 @@
                         <div class="rune-corner top-right"></div>
                         <div class="rune-corner bottom-left"></div>
                         <div class="rune-corner bottom-right"></div>
-                    </div>
-                </div>
-                <div class="status-bar">
-                    <div class="status-item">
-                        <i class="fas fa-robot"></i>
-                        <span id="robot-status">Disconnected</span>
-                    </div>
-                    <div class="status-item">
-                        <i class="fas fa-camera"></i>
-                        <span id="camera-status">Disconnected</span>
-                    </div>
-                    <div class="status-item">
-                        <i class="fas fa-microphone"></i>
-                        <span id="voice-status">Disconnected</span>
-                    </div>
-                    <div class="status-item">
-                        <i class="fas fa-brain"></i>
-                        <span id="ai-status">Disconnected</span>
                     </div>
                 </div>
             </div>
@@ -113,6 +98,82 @@
             <div class="wave"></div>
         </div>
         <div class="voice-text">Listening...</div>
+    </div>
+    
+    <!-- Settings Modal -->
+    <div id="settings-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Settings</h2>
+                <span class="close-button">&times;</span>
+            </div>
+            <div class="modal-body">
+                <div class="setting-section">
+                    <h3>Microphone Permissions</h3>
+                    <p id="permission-status">Checking microphone permission status...</p>
+                    <div id="permission-instructions"></div>
+                    <button id="request-permission-button" class="action-button">
+                        <i class="fas fa-microphone"></i> Request Microphone Access
+                    </button>
+                </div>
+                
+                <div class="setting-section">
+                    <h3>Text-to-Speech Settings</h3>
+                    <div class="speech-settings">
+                        <div class="setting-group">
+                            <label for="speech-rate">Speech Rate:</label>
+                            <input type="range" id="speech-rate" min="80" max="200" value="130" class="settings-slider">
+                            <span id="speech-rate-value">130</span>
+                        </div>
+                        <div class="setting-group">
+                            <label for="speech-volume">Volume:</label>
+                            <input type="range" id="speech-volume" min="0" max="200" value="200" class="settings-slider">
+                            <span id="speech-volume-value">100%</span>
+                        </div>
+                        <button id="test-tts-button" class="action-button">
+                            <i class="fas fa-volume-up"></i> Test Speech
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="setting-section">
+                    <h3>Connection Security</h3>
+                    <p id="connection-status">Checking connection security...</p>
+                    <div id="https-instructions"></div>
+                </div>
+                
+                <div class="setting-section">
+                    <h3>System Status</h3>
+                    <div class="status-grid">
+                        <div class="status-grid-item">
+                            <i class="fas fa-robot"></i>
+                            <span>Robot:</span>
+                            <span id="robot-status">Disconnected</span>
+                        </div>
+                        <div class="status-grid-item">
+                            <i class="fas fa-camera"></i>
+                            <span>Camera:</span>
+                            <span id="camera-status">Disconnected</span>
+                        </div>
+                        <div class="status-grid-item">
+                            <i class="fas fa-microphone"></i>
+                            <span>Voice:</span>
+                            <span id="voice-status">Disconnected</span>
+                        </div>
+                        <div class="status-grid-item">
+                            <i class="fas fa-brain"></i>
+                            <span>AI:</span>
+                            <span id="ai-status">Disconnected</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="setting-section">
+                    <h3>Browser-Specific Instructions</h3>
+                    <div id="browser-instructions"></div>
+                </div>
+            </div>
+        </div>
     </div>
 
     <!-- Scripts -->
