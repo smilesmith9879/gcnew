@@ -79,12 +79,13 @@ class TextToSpeech:
         
         return cleaned_text
     
-    def speak(self, text):
+    def speak(self, text, is_announcement=False):
         """
         Convert text to speech.
         
         Args:
             text (str): The text to convert to speech
+            is_announcement (bool): Whether this is a direct announcement (skip thinking part removal)
             
         Returns:
             bool: True if successful, False otherwise
@@ -94,8 +95,15 @@ class TextToSpeech:
             return False
         
         try:
-            # Remove thinking part from the response
-            cleaned_text = self.remove_thinking_part(text)
+            # Process the text
+            if is_announcement:
+                # Use the text directly for announcements
+                cleaned_text = text
+            else:
+                # Remove thinking part from AI responses
+                cleaned_text = self.remove_thinking_part(text)
+            
+            logger.info(f"Speaking: {cleaned_text}")
             
             # Start a new thread for speech to avoid blocking
             threading.Thread(target=self._speak_thread, args=(cleaned_text,)).start()

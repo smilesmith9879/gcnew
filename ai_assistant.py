@@ -19,6 +19,7 @@ class AIAssistant:
     def __init__(self):
         """Initialize the AI assistant with configuration settings."""
         self.config = Config()
+        self.is_ready = False
         
         # Check if Ollama is available
         try:
@@ -34,11 +35,38 @@ class AIAssistant:
                 logger.warning(f"Model {self.config.OLLAMA_MODEL} not found in Ollama. Available models: {model_names}")
                 logger.info(f"You may need to pull the model using: ollama pull {self.config.OLLAMA_MODEL}")
             
+            # Verify that the model is working by sending a simple test prompt
+            logger.info("Testing DeepSeek R1 model with a simple prompt...")
+            test_response = requests.post(
+                f"{self.config.OLLAMA_URL}/api/generate",
+                json={
+                    "model": self.config.OLLAMA_MODEL,
+                    "prompt": "Say hello",
+                    "system": "You are an AI assistant.",
+                    "stream": False
+                }
+            )
+            
+            if test_response.status_code == 200:
+                logger.info(f"DeepSeek R1 model test successful")
+                self.is_ready = True
+            else:
+                logger.warning(f"DeepSeek R1 model test failed with status code {test_response.status_code}")
+            
             logger.info(f"AI assistant initialized with model: {self.config.OLLAMA_MODEL}")
         except requests.exceptions.RequestException as e:
             logger.error(f"Failed to connect to Ollama server: {e}")
             logger.info("Make sure Ollama is running and accessible")
             raise
+    
+    def is_model_ready(self):
+        """
+        Check if the AI model is ready to use.
+        
+        Returns:
+            bool: True if the model is ready, False otherwise
+        """
+        return self.is_ready
     
     def process_command(self, text):
         """

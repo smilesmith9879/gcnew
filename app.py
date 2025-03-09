@@ -54,6 +54,12 @@ except Exception as e:
 try:
     ai_assistant = AIAssistant()
     logger.info("AI assistant initialized successfully")
+    
+    # Check if the model is ready
+    if ai_assistant.is_model_ready():
+        logger.info("DeepSeek R1 model is ready")
+    else:
+        logger.warning("DeepSeek R1 model is not fully ready yet")
 except Exception as e:
     logger.error(f"Failed to initialize AI assistant: {e}")
     ai_assistant = None
@@ -70,6 +76,57 @@ except Exception as e:
 current_speed = 50  # Default speed (0-100)
 is_streaming = False
 streaming_thread = None
+ai_ready_announced = False  # Flag to track if we've announced AI readiness
+ai_ready_check_thread = None  # Thread for checking AI readiness
+
+# Function to announce AI readiness
+def announce_ai_ready():
+    global ai_ready_announced
+    if ai_ready_announced:
+        return
+    
+    ai_ready_announced = True
+    ready_message = "Hello, I am ready."
+    logger.info("Announcing AI ready: " + ready_message)
+    
+    # Speak the ready message
+    if tts:
+        tts.speak(ready_message, is_announcement=True)
+    
+    # Send the ready message to all connected clients
+    socketio.emit('ai_ready', {
+        'message': ready_message
+    })
+
+# Function to periodically check if AI is ready
+def check_ai_ready_task():
+    global ai_ready_announced
+    
+    logger.info("Starting background task to check AI readiness")
+    
+    # Check every 5 seconds for up to 2 minutes (24 checks)
+    for i in range(24):
+        # If we've already announced or there's no AI assistant, stop checking
+        if ai_ready_announced or not ai_assistant:
+            break
+            
+        # Check if the model is ready
+        if ai_assistant.is_model_ready():
+            logger.info(f"DeepSeek R1 model is now ready after {i * 5} seconds")
+            announce_ai_ready()
+            break
+            
+        # Wait 5 seconds before next check
+        time.sleep(5)
+    
+    logger.info("Completed background AI readiness check task")
+
+# Start the AI ready check in the background
+if ai_assistant and not ai_assistant.is_model_ready() and not ai_ready_announced:
+    ai_ready_check_thread = threading.Thread(target=check_ai_ready_task)
+    ai_ready_check_thread.daemon = True
+    ai_ready_check_thread.start()
+    logger.info("Started background thread to check for AI readiness")
 
 @app.route('/')
 def index():
@@ -79,11 +136,18 @@ def index():
 @app.route('/api/status', methods=['GET'])
 def get_status():
     """Get the current status of the robot."""
+    global ai_ready_announced
+    
+    # Check if AI is ready but hasn't been announced yet
+    if ai_assistant and ai_assistant.is_model_ready() and not ai_ready_announced:
+        # Schedule the announcement to happen shortly after this request
+        socketio.start_background_task(announce_ai_ready)
+    
     status = {
         'robot': robot is not None,
         'camera': camera is not None,
         'voice': voice is not None,
-        'ai': ai_assistant is not None,
+        'ai': ai_assistant is not None and ai_assistant.is_model_ready(),
         'speed': current_speed,
         'streaming': is_streaming
     }
@@ -105,6 +169,12 @@ def set_speed():
 def handle_connect():
     """Handle client connection."""
     logger.info(f"Client connected: {request.sid}")
+    
+    # Check if AI is ready but hasn't been announced yet
+    if ai_assistant and ai_assistant.is_model_ready() and not ai_ready_announced:
+        # Schedule the announcement to happen shortly after connection
+        socketio.start_background_task(announce_ai_ready)
+    
     emit('status', {'connected': True})
 
 @socketio.on('disconnect')
@@ -236,42 +306,61 @@ def handle_voice_command(data):
     
     try:
         audio_data = data.get('audio')
-        if audio_data:
-            # Process the audio data with voice recognition
-            text = voice.recognize(audio_data)
-            
-            if text:
-                # Process the recognized text with AI assistant
-                response = ai_assistant.process_command(text)
-                response_text = response.get('text', '')
-                
-                # Execute command if applicable
-                if 'command' in response:
-                    command = response['command']
-                    if command.get('type') == 'movement':
-                        handle_movement({'direction': command.get('direction')})
-                    elif command.get('type') == 'camera':
-                        handle_camera_control({
-                            'horizontal': command.get('horizontal', 0),
-                            'vertical': command.get('vertical', 0)
-                        })
-                
-                # Use text-to-speech to speak the response
-                if tts:
-                    tts.speak(response_text)
-                
-                emit('voice_response', {
-                    'success': True,
-                    'text': text,
-                    'response': response_text,
-                    'tts_available': tts is not None
-                })
-            else:
-                emit('voice_response', {'success': False, 'message': 'Could not recognize speech'})
-        else:
+        if not audio_data:
+            logger.error("No audio data received in voice command")
             emit('voice_response', {'success': False, 'message': 'No audio data received'})
+            return
+        
+        logger.info(f"Received voice command audio data of length: {len(audio_data)}")
+        
+        # Process the audio data with voice recognition
+        text = voice.recognize(audio_data)
+        
+        if not text:
+            logger.error("Voice recognition failed to produce text")
+            emit('voice_response', {'success': False, 'message': 'Could not recognize speech. Please try speaking more clearly.'})
+            return
+        
+        logger.info(f"Recognized voice command: {text}")
+        
+        # Process the recognized text with AI assistant
+        response = ai_assistant.process_command(text)
+        
+        # Handle case where response is None
+        if response is None:
+            logger.error("AI assistant returned None response")
+            emit('voice_response', {'success': False, 'message': 'AI assistant returned no response'})
+            return
+        
+        response_text = response.get('text', '')
+        logger.info(f"AI assistant response: {response_text[:100]}...")
+        
+        # Execute command if applicable
+        if 'command' in response:
+            command = response['command']
+            logger.info(f"Executing command: {command}")
+            
+            if command.get('type') == 'movement':
+                handle_movement({'direction': command.get('direction')})
+            elif command.get('type') == 'camera':
+                handle_camera_control({
+                    'horizontal': command.get('horizontal', 0),
+                    'vertical': command.get('vertical', 0)
+                })
+        
+        # Use text-to-speech to speak the response
+        if tts and response_text:
+            logger.info("Converting response to speech")
+            tts.speak(response_text)
+        
+        emit('voice_response', {
+            'success': True,
+            'text': text,
+            'response': response_text,
+            'tts_available': tts is not None
+        })
     except Exception as e:
-        logger.error(f"Voice command error: {e}")
+        logger.error(f"Voice command error: {e}", exc_info=True)
         emit('error', {'message': f'Voice command error: {str(e)}'})
 
 @socketio.on('text_command')
@@ -286,6 +375,13 @@ def handle_text_command(data):
         if text:
             # Process the text with AI assistant
             response = ai_assistant.process_command(text)
+            
+            # Handle case where response is None
+            if response is None:
+                logger.error("AI assistant returned None response")
+                emit('text_response', {'success': False, 'message': 'AI assistant returned no response'})
+                return
+            
             response_text = response.get('text', '')
             
             # Execute command if applicable
@@ -300,7 +396,7 @@ def handle_text_command(data):
                     })
             
             # Use text-to-speech to speak the response
-            if tts:
+            if tts and response_text:
                 tts.speak(response_text)
             
             emit('text_response', {
