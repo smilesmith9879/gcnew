@@ -82,7 +82,8 @@ ai_ready_check_thread = None  # Thread for checking AI readiness
 # TTS settings with defaults
 tts_settings = {
     'speech_rate': 130,
-    'speech_volume': 200
+    'speech_volume': 200,
+    'language': 'auto'  # 'auto', 'en', or 'zh'
 }
 
 # Function to announce AI readiness
@@ -104,7 +105,8 @@ def announce_ai_ready():
                 ready_message, 
                 is_announcement=True, 
                 speech_rate=announcement_rate,
-                speech_volume=tts_settings['speech_volume']
+                speech_volume=tts_settings['speech_volume'],
+                language='en'  # Always use English for system announcement
             )
         except Exception as e:
             logger.error(f"Error announcing AI ready via speech: {e}")
@@ -382,7 +384,14 @@ def handle_voice_command(data):
         if tts and response_text:
             try:
                 logger.info("Converting response to speech")
-                tts.speak(response_text, speech_rate=tts_settings['speech_rate'], speech_volume=tts_settings['speech_volume'])
+                # Set language based on settings or auto-detect
+                language = tts_settings['language'] if tts_settings['language'] != 'auto' else None
+                tts.speak(
+                    response_text, 
+                    speech_rate=tts_settings['speech_rate'], 
+                    speech_volume=tts_settings['speech_volume'],
+                    language=language
+                )
             except Exception as tts_err:
                 logger.error(f"Error using text-to-speech: {tts_err}")
         
@@ -448,7 +457,14 @@ def handle_text_command(data):
         # Use text-to-speech to speak the response with current settings
         if tts and response_text:
             try:
-                tts.speak(response_text, speech_rate=tts_settings['speech_rate'], speech_volume=tts_settings['speech_volume'])
+                # Set language based on settings or auto-detect
+                language = tts_settings['language'] if tts_settings['language'] != 'auto' else None
+                tts.speak(
+                    response_text, 
+                    speech_rate=tts_settings['speech_rate'], 
+                    speech_volume=tts_settings['speech_volume'],
+                    language=language
+                )
             except Exception as tts_err:
                 logger.error(f"Error using text-to-speech: {tts_err}")
         
@@ -486,16 +502,22 @@ def handle_update_tts_settings(data):
     # Get new settings with validation
     speech_rate = data.get('speech_rate', 130)
     speech_volume = data.get('speech_volume', 200)
+    language = data.get('language', 'auto')
     
     # Apply range constraints
     speech_rate = max(80, min(200, speech_rate))
     speech_volume = max(0, min(200, speech_volume))
     
+    # Validate language
+    if language not in ['auto', 'en', 'zh']:
+        language = 'auto'
+    
     # Update settings
     tts_settings['speech_rate'] = speech_rate
     tts_settings['speech_volume'] = speech_volume
+    tts_settings['language'] = language
     
-    logger.info(f"Updated TTS settings: rate={speech_rate}, volume={speech_volume}")
+    logger.info(f"Updated TTS settings: rate={speech_rate}, volume={speech_volume}, language={language}")
 
 @socketio.on('get_tts_settings')
 def handle_get_tts_settings():
@@ -512,19 +534,46 @@ def handle_test_tts(data):
     # Get settings from request or use current settings
     speech_rate = data.get('speech_rate', tts_settings['speech_rate'])
     speech_volume = data.get('speech_volume', tts_settings['speech_volume'])
+    language = data.get('language', tts_settings['language'])
+    custom_text = data.get('text', None)
     
     # Apply range constraints
     speech_rate = max(80, min(200, speech_rate))
     speech_volume = max(0, min(200, speech_volume))
     
+    # Validate language
+    if language not in ['auto', 'en', 'zh']:
+        language = 'auto'
+    
     try:
-        # Speak a test message
-        test_message = "This is a test of the text-to-speech system with the current settings."
-        tts.speak(test_message, is_announcement=True, speech_rate=speech_rate, speech_volume=speech_volume)
+        # Choose appropriate test message based on language
+        if custom_text:
+            test_message = custom_text
+        elif language == 'zh':
+            test_message = "这是一个中文语音合成测试，当前使用的是设定好的语音参数。"
+        elif language == 'en':
+            test_message = "This is a test of the text-to-speech system with the current settings."
+        else:
+            # Auto-detect - use both languages to demonstrate
+            test_message = "This is a bilingual test. 这是一个双语测试。"
+        
+        # Convert language setting for TTS function
+        tts_language = None if language == 'auto' else language
+        
+        # Speak the test message
+        tts.speak(
+            test_message, 
+            is_announcement=True, 
+            speech_rate=speech_rate, 
+            speech_volume=speech_volume,
+            language=tts_language
+        )
         
         emit('tts_test', {
             'success': True,
-            'message': 'Text-to-speech test started'
+            'message': 'Text-to-speech test started',
+            'text': test_message,
+            'language': language
         })
     except Exception as e:
         logger.error(f"Error testing text-to-speech: {e}")

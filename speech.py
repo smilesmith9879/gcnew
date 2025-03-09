@@ -7,6 +7,7 @@ import threading
 import subprocess
 import tempfile
 import re
+import langid  # For language detection
 from config import Config
 
 # Configure logging
@@ -25,6 +26,10 @@ class TextToSpeech:
         self.use_espeak = False
         self.use_aplay = False
         
+        # Chinese voice settings
+        self.chinese_voice_pyttsx3 = None
+        self.english_voice_pyttsx3 = None
+        
         # Try different TTS engines in order of preference
         self._try_initialize_engines()
         
@@ -41,15 +46,30 @@ class TextToSpeech:
             # Configure voice properties
             voices = self.engine.getProperty('voices')
             if voices:
-                # Try to set a female voice if available
-                female_voice = None
+                # Try to find both English and Chinese voices
                 for voice in voices:
-                    if 'female' in voice.name.lower():
-                        female_voice = voice.id
-                        break
+                    voice_name = voice.name.lower()
+                    voice_id = voice.id
+                    
+                    # Check for Chinese voices
+                    if any(lang in voice_name for lang in ['chinese', 'mandarin', 'cmn', 'zh', 'zh-cn']):
+                        self.chinese_voice_pyttsx3 = voice_id
+                        logger.info(f"Found Chinese voice: {voice.name}")
+                    
+                    # Check for female English voice
+                    if 'female' in voice_name and any(lang in voice_name for lang in ['english', 'en', 'en-us']):
+                        self.english_voice_pyttsx3 = voice_id
                 
-                if female_voice:
-                    self.engine.setProperty('voice', female_voice)
+                # Fallback to any English voice if no specific female voice found
+                if not self.english_voice_pyttsx3:
+                    for voice in voices:
+                        if any(lang in voice.name.lower() for lang in ['english', 'en', 'en-us']):
+                            self.english_voice_pyttsx3 = voice.id
+                            break
+                
+                # If no Chinese voice found, log it
+                if not self.chinese_voice_pyttsx3:
+                    logger.warning("No Chinese voice found in pyttsx3. Will use espeak for Chinese.")
             
             # Set speech rate and volume - adjusted for better clarity
             self.engine.setProperty('rate', 130)  # Reduced from 150 to 130 words per minute
@@ -74,8 +94,8 @@ class TextToSpeech:
             try:
                 # Check if espeak is available
                 result = subprocess.run(['which', 'espeak'], 
-                                      stdout=subprocess.PIPE, 
-                                      stderr=subprocess.PIPE)
+                                       stdout=subprocess.PIPE, 
+                                       stderr=subprocess.PIPE)
                 if result.returncode == 0:
                     self.use_espeak = True
                     logger.info("espeak text-to-speech available")
@@ -97,6 +117,25 @@ class TextToSpeech:
         except Exception as e:
             logger.warning(f"Failed to check for aplay: {e}")
     
+    def detect_language(self, text):
+        """
+        Detect the language of the text.
+        
+        Args:
+            text (str): The text to detect language for
+            
+        Returns:
+            str: Language code ('en' for English, 'zh' for Chinese, etc.)
+        """
+        try:
+            lang, confidence = langid.classify(text)
+            logger.info(f"Language detected: {lang} (confidence: {confidence:.2f})")
+            return lang
+        except Exception as e:
+            logger.error(f"Error detecting language: {e}")
+            # Default to English if detection fails
+            return 'en'
+    
     def remove_thinking_part(self, text):
         """
         Remove the thinking part from DeepSeek's response.
@@ -114,7 +153,12 @@ class TextToSpeech:
             r"Thinking:.*?(?=\n\n|\Z)",
             r"Let's analyze.*?(?=\n\n|\Z)",
             r"Hmm, let.*?(?=\n\n|\Z)",
-            r"I need to.*?(?=\n\n|\Z)"
+            r"I need to.*?(?=\n\n|\Z)",
+            # Chinese thinking patterns
+            r"让我思考.*?(?=\n\n|\Z)",
+            r"思考中:.*?(?=\n\n|\Z)",
+            r"我需要.*?(?=\n\n|\Z)",
+            r"让我分析.*?(?=\n\n|\Z)"
         ]
         
         cleaned_text = text
@@ -129,7 +173,7 @@ class TextToSpeech:
         
         return cleaned_text
     
-    def speak(self, text, is_announcement=False, speech_rate=None, speech_volume=None):
+    def speak(self, text, is_announcement=False, speech_rate=None, speech_volume=None, language=None):
         """
         Convert text to speech using available methods.
         
@@ -138,6 +182,7 @@ class TextToSpeech:
             is_announcement (bool): Whether this is a direct announcement (skip thinking part removal)
             speech_rate (int): Optional speech rate in words per minute (80-200)
             speech_volume (int): Optional volume level (0-200)
+            language (str): Optional language code override ('en', 'zh')
             
         Returns:
             bool: True if successful, False otherwise
@@ -160,24 +205,28 @@ class TextToSpeech:
                 speech_rate = 130
             if speech_volume is None:
                 speech_volume = 200
-            
+                
             # Apply range constraints
             speech_rate = max(80, min(200, speech_rate))
             speech_volume = max(0, min(200, speech_volume))
             
-            logger.info(f"Speaking: '{cleaned_text[:50]}...' (rate={speech_rate}, volume={speech_volume})")
+            # Detect language if not specified
+            if language is None:
+                language = self.detect_language(cleaned_text)
+            
+            logger.info(f"Speaking: '{cleaned_text[:50]}...' (rate={speech_rate}, volume={speech_volume}, language={language})")
             
             # Start a new thread for speech to avoid blocking
             threading.Thread(
                 target=self._speak_thread, 
-                args=(cleaned_text, speech_rate, speech_volume)
+                args=(cleaned_text, speech_rate, speech_volume, language)
             ).start()
             return True
         except Exception as e:
             logger.error(f"Error converting text to speech: {e}")
             return False
-    
-    def _speak_thread(self, text, speech_rate=130, speech_volume=200):
+
+    def _speak_thread(self, text, speech_rate=130, speech_volume=200, language='en'):
         """Thread function for speaking text using available methods."""
         # Try different methods in order of preference
         success = False
@@ -185,11 +234,19 @@ class TextToSpeech:
         # First try pyttsx3 if available
         if self.use_pyttsx3 and not success:
             try:
-                logger.info(f"Using pyttsx3 for speech (rate={speech_rate}, volume={speech_volume/200})")
+                logger.info(f"Using pyttsx3 for speech (rate={speech_rate}, volume={speech_volume/200}, language={language})")
                 
                 # Update engine properties for this specific speech
                 self.engine.setProperty('rate', speech_rate)
                 self.engine.setProperty('volume', speech_volume / 200)  # Convert to 0-1 range
+                
+                # Select voice based on language
+                if language == 'zh' and self.chinese_voice_pyttsx3:
+                    logger.info(f"Using Chinese voice: {self.chinese_voice_pyttsx3}")
+                    self.engine.setProperty('voice', self.chinese_voice_pyttsx3)
+                elif self.english_voice_pyttsx3:
+                    logger.info(f"Using English voice: {self.english_voice_pyttsx3}")
+                    self.engine.setProperty('voice', self.english_voice_pyttsx3)
                 
                 self.engine.say(text)
                 self.engine.runAndWait()
@@ -201,12 +258,18 @@ class TextToSpeech:
         # If pyttsx3 failed, try espeak
         if self.use_espeak and not success:
             try:
-                logger.info(f"Using espeak for speech (rate={speech_rate}, volume={speech_volume})")
+                logger.info(f"Using espeak for speech (rate={speech_rate}, volume={speech_volume}, language={language})")
+                
+                # Set voice based on language
+                voice = 'en+f3'  # Default female English voice
+                if language == 'zh':
+                    voice = 'zh'  # Chinese voice
+                
                 # Run espeak with the text - adjusted for better clarity
                 subprocess.run([
                     'espeak', 
-                    '-v', 'en+f3',         # Female voice
-                    '-s', str(speech_rate), # Speech rate
+                    '-v', voice,              # Language-appropriate voice
+                    '-s', str(speech_rate),   # Speech rate
                     '-a', str(speech_volume), # Amplitude (volume)
                     text
                 ], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
@@ -217,18 +280,23 @@ class TextToSpeech:
         # As a last resort, try to generate speech and play with aplay
         if self.use_aplay and not success:
             try:
-                logger.info(f"Using espeak + aplay for speech (rate={speech_rate}, volume={speech_volume})")
+                logger.info(f"Using espeak + aplay for speech (rate={speech_rate}, volume={speech_volume}, language={language})")
                 # Create a temporary wav file
                 with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as temp_file:
                     temp_path = temp_file.name
+                
+                # Set voice based on language
+                voice = 'en+f3'  # Default female English voice
+                if language == 'zh':
+                    voice = 'zh'  # Chinese voice
                 
                 # Generate speech to wav file
                 try:
                     subprocess.run([
                         'espeak', 
-                        '-v', 'en+f3',          # Female voice
-                        '-s', str(speech_rate),  # Speech rate
-                        '-a', str(speech_volume), # Amplitude (volume)
+                        '-v', voice,               # Language-appropriate voice
+                        '-s', str(speech_rate),    # Speech rate
+                        '-a', str(speech_volume),  # Amplitude (volume)
                         '-w', temp_path, 
                         text
                     ], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
@@ -256,13 +324,24 @@ if __name__ == "__main__":
     try:
         tts = TextToSpeech()
         print("Text-to-speech initialized. Enter text to speak (Ctrl+C to exit):")
+        print("Type ':zh' before text to speak in Chinese")
+        print("Type ':en' before text to speak in English")
         
         while True:
             user_input = input("> ")
             if user_input.lower() in ["exit", "quit"]:
                 break
             
-            tts.speak(user_input)
+            # Check if language is specified
+            language = None
+            if user_input.startswith(':zh '):
+                language = 'zh'
+                user_input = user_input[4:]
+            elif user_input.startswith(':en '):
+                language = 'en'
+                user_input = user_input[4:]
+            
+            tts.speak(user_input, language=language)
     
     except KeyboardInterrupt:
         print("\nExiting...")

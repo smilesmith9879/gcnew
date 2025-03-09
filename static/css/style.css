@@ -825,11 +825,42 @@ body {
     color: var(--secondary-color);
 }
 
-#test-tts-button {
+/* Language selector styling */
+.language-select {
+    flex: 1;
+    background-color: rgba(90, 122, 154, 0.3);
+    color: var(--text-color);
+    border: 1px solid var(--border-color);
+    border-radius: 5px;
+    padding: 6px 8px;
+    font-size: 0.9rem;
+    cursor: pointer;
+    min-width: 120px;
+    outline: none;
+}
+
+.language-select:focus {
+    border-color: var(--secondary-color);
+    box-shadow: 0 0 5px var(--rune-glow);
+}
+
+.language-select option {
+    background-color: var(--background-color);
+    color: var(--text-color);
+}
+
+/* Test buttons container */
+.test-buttons {
+    display: flex;
+    gap: 10px;
+    justify-content: center;
     margin-top: 5px;
-    margin-left: auto;
-    margin-right: auto;
-    display: block;
+}
+
+#test-tts-button,
+#test-tts-chinese-button {
+    flex: 1;
+    max-width: 150px;
 }
 
 .action-button {
@@ -1036,6 +1067,17 @@ body {
         grid-template-columns: 1fr;
         padding: 10px;
     }
+    
+    .test-buttons {
+        flex-direction: column;
+        gap: 5px;
+    }
+    
+    #test-tts-button,
+    #test-tts-chinese-button {
+        max-width: none;
+        width: 100%;
+    }
 }
 
 /* iPhone-specific adjustments */
@@ -1107,5 +1149,10 @@ body {
     
     .status-grid-item {
         font-size: 0.9rem;
+    }
+    
+    .language-select {
+        font-size: 0.8rem;
+        padding: 5px 6px;
     }
 } 

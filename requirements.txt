@@ -13,4 +13,5 @@ RPi.GPIO==0.7.1
 picamera2==0.3.12
 pydantic==2.5.2
 websockets==11.0.3
-pyttsx3==2.90 
+pyttsx3==2.90
+langid==1.1.6 

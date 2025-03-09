@@ -33,7 +33,9 @@ const speechRateSlider = document.getElementById('speech-rate');
 const speechRateValue = document.getElementById('speech-rate-value');
 const speechVolumeSlider = document.getElementById('speech-volume');
 const speechVolumeValue = document.getElementById('speech-volume-value');
+const speechLanguageSelect = document.getElementById('speech-language');
 const testTtsButton = document.getElementById('test-tts-button');
+const testTtsChineseButton = document.getElementById('test-tts-chinese-button');
 
 // Status elements
 const robotStatus = document.getElementById('robot-status');
@@ -53,6 +55,7 @@ let ttsEnabled = true;
 let micPermissionState = 'unknown'; // unknown, granted, denied, prompt
 let speechRate = 130; // Default speech rate
 let speechVolume = 200; // Default speech volume (max)
+let speechLanguage = 'auto'; // Default language (auto-detect)
 
 // Initialize the application
 document.addEventListener('DOMContentLoaded', () => {
@@ -150,8 +153,14 @@ function setupEventListeners() {
     // Speech volume slider
     speechVolumeSlider.addEventListener('input', handleSpeechVolumeChange);
     
+    // Speech language select
+    speechLanguageSelect.addEventListener('change', handleSpeechLanguageChange);
+    
     // Test TTS button
     testTtsButton.addEventListener('click', testTts);
+    
+    // Test Chinese TTS button
+    testTtsChineseButton.addEventListener('click', testTtsChinese);
 }
 
 // Set up socket events
@@ -277,6 +286,11 @@ function setupSocketEvents() {
             speechVolumeSlider.value = speechVolume;
             const volumePercent = Math.round((speechVolume / 200) * 100);
             speechVolumeValue.textContent = volumePercent + '%';
+        }
+        
+        if (data.language !== undefined) {
+            speechLanguage = data.language;
+            speechLanguageSelect.value = speechLanguage;
         }
     });
     
@@ -962,20 +976,42 @@ function handleSpeechVolumeChange() {
     updateTtsSettings();
 }
 
+// Handle speech language change
+function handleSpeechLanguageChange() {
+    speechLanguage = speechLanguageSelect.value;
+    
+    // Send updated settings to server
+    updateTtsSettings();
+}
+
 // Test text-to-speech with current settings
 function testTts() {
     socket.emit('test_tts', {
         speech_rate: speechRate,
-        speech_volume: speechVolume
+        speech_volume: speechVolume,
+        language: speechLanguage
     });
     
     addMessage('system', 'Testing text-to-speech with current settings...');
+}
+
+// Test Chinese text-to-speech specifically
+function testTtsChinese() {
+    socket.emit('test_tts', {
+        speech_rate: speechRate,
+        speech_volume: speechVolume,
+        language: 'zh',
+        text: "这是中文语音合成测试。当前的语音速度和音量设置已应用。"
+    });
+    
+    addMessage('system', '正在测试中文语音合成...');
 }
 
 // Update TTS settings on server
 function updateTtsSettings() {
     socket.emit('update_tts_settings', {
         speech_rate: speechRate,
-        speech_volume: speechVolume
+        speech_volume: speechVolume,
+        language: speechLanguage
     });
 } 

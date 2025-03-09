@@ -130,9 +130,22 @@
                             <input type="range" id="speech-volume" min="0" max="200" value="200" class="settings-slider">
                             <span id="speech-volume-value">100%</span>
                         </div>
-                        <button id="test-tts-button" class="action-button">
-                            <i class="fas fa-volume-up"></i> Test Speech
-                        </button>
+                        <div class="setting-group language-selector">
+                            <label for="speech-language">Language:</label>
+                            <select id="speech-language" class="language-select">
+                                <option value="auto">Auto-detect</option>
+                                <option value="en">English</option>
+                                <option value="zh">Chinese</option>
+                            </select>
+                        </div>
+                        <div class="test-buttons">
+                            <button id="test-tts-button" class="action-button">
+                                <i class="fas fa-volume-up"></i> Test Speech
+                            </button>
+                            <button id="test-tts-chinese-button" class="action-button">
+                                <i class="fas fa-volume-up"></i> 测试中文
+                            </button>
+                        </div>
                     </div>
                 </div>
                 
