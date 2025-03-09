@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Four-Wheel Drive Car Control</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.6.1/socket.io.min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <!-- Header with ancient rune decoration -->
+        <header class="header">
+            <div class="rune top-left"></div>
+            <h1>AI Four-Wheel Drive Car</h1>
+            <div class="rune top-right"></div>
+        </header>
+
+        <!-- Main content area -->
+        <main class="main-content">
+            <!-- Left joystick for car movement -->
+            <div class="control-section left-control">
+                <h2>Movement Control</h2>
+                <div class="joystick-container" id="movement-joystick">
+                    <div class="joystick-base">
+                        <div class="joystick-handle"></div>
+                    </div>
+                </div>
+                <div class="speed-control">
+                    <label for="speed-slider">Speed: <span id="speed-value">50</span>%</label>
+                    <input type="range" id="speed-slider" min="0" max="100" value="50">
+                </div>
+            </div>
+
+            <!-- Center video feed -->
+            <div class="video-section">
+                <div class="video-container">
+                    <img id="video-feed" src="{{ url_for('static', filename='img/placeholder.jpg') }}" alt="Camera Feed">
+                    <div class="video-overlay">
+                        <div class="rune-corner top-left"></div>
+                        <div class="rune-corner top-right"></div>
+                        <div class="rune-corner bottom-left"></div>
+                        <div class="rune-corner bottom-right"></div>
+                    </div>
+                </div>
+                <div class="status-bar">
+                    <div class="status-item">
+                        <i class="fas fa-robot"></i>
+                        <span id="robot-status">Disconnected</span>
+                    </div>
+                    <div class="status-item">
+                        <i class="fas fa-camera"></i>
+                        <span id="camera-status">Disconnected</span>
+                    </div>
+                    <div class="status-item">
+                        <i class="fas fa-microphone"></i>
+                        <span id="voice-status">Disconnected</span>
+                    </div>
+                    <div class="status-item">
+                        <i class="fas fa-brain"></i>
+                        <span id="ai-status">Disconnected</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right joystick for camera control -->
+            <div class="control-section right-control">
+                <h2>Camera Control</h2>
+                <div class="joystick-container" id="camera-joystick">
+                    <div class="joystick-base">
+                        <div class="joystick-handle"></div>
+                    </div>
+                </div>
+                <div class="camera-info">
+                    <div>Horizontal: <span id="horizontal-angle">0°</span></div>
+                    <div>Vertical: <span id="vertical-angle">0°</span></div>
+                </div>
+            </div>
+        </main>
+
+        <!-- Bottom interaction area -->
+        <footer class="interaction-area">
+            <button id="voice-button" class="voice-button">
+                <i class="fas fa-microphone"></i>
+            </button>
+            <div class="chat-input-container">
+                <input type="text" id="chat-input" placeholder="Enter a command..." class="chat-input">
+                <button id="send-button" class="send-button">
+                    <i class="fas fa-paper-plane"></i>
+                </button>
+            </div>
+        </footer>
+
+        <!-- Chat messages area (hidden by default, slides up when needed) -->
+        <div class="chat-messages" id="chat-messages">
+            <div class="message-container">
+                <div class="message system">
+                    Welcome to the AI Four-Wheel Drive Car Control System!
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Voice recording indicator (hidden by default) -->
+    <div class="voice-indicator" id="voice-indicator">
+        <div class="voice-waves">
+            <div class="wave"></div>
+            <div class="wave"></div>
+            <div class="wave"></div>
+            <div class="wave"></div>
+        </div>
+        <div class="voice-text">Listening...</div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="{{ url_for('static', filename='js/joystick.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/camera.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/voice.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+</body>
+</html> 

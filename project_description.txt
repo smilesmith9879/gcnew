@@ -1,0 +1,40 @@
+AI Four-Wheel Drive Car Comprehensive Solution
+March 3, 2025 – Second Edition
+
+1. Functional Overview
+This solution is based on the Raspberry Pi 5, integrating the official Raspberry Pi camera, a four-wheel-drive chassis, and PCA9685 servo control, creating an AI smart car that supports web remote control, visual SLAM, autonomous navigation, and voice interaction.
+
+Core Features
+✅ Web Control: The web-based simulated joystick controls the car's movement, while another joystick adjusts the camera gimbal angle. The camera feed is displayed in real-time.
+✅ Real-time Video Streaming: Uses WebRTC for low-latency video transmission, utilizing the Raspberry Pi Camera + libcamera.
+✅ Remote API Control: Supports remote control of the car and camera via Flask API + WebSocket.
+✅ Voice Interaction: Implements local voice recognition and interaction using Whisper + Ollama + DeepSeekR1 1.7B.
+
+2. Hardware Structure
+Component	Recommended Model	Function Description
+Computing Unit	Raspberry Pi 5	Controls car movement, voice interaction, and web interface
+Camera	HUANER USB 160degrees 800W,3840*2160	Supports high-definition video streaming
+Car Chassis	LOBOT Four-Wheel Drive Chassis	Supports forward, backward, turning, and lateral movement
+Motor Driver	PCA9685 + L298N	Controls four motors via I2C and supports PWM speed adjustment
+Servo Gimbal	MG996R + PCA9685	Horizontal rotation: ±45°, Vertical rotation: -10° to 30° (Default: 0° and 10°)
+Voice Processing	ReSpeaker 2-Mic / 4-Mic	Used for voice recognition and command control
+3. Software System
+Operating System: Ubuntu Server 24.04 LTS
+Core Control Program: LOBOROBOT.py (responsible for car movement control)
+4. Web Control Interface Layout (Mobile Landscape Mode)
+📌 Dual Joystick Control
+Left Joystick: Controls car movement (forward, backward, left, right).
+Right Joystick: Adjusts the camera gimbal angle, allowing rotation up, down, left, and right.
+Below Left Joystick: A speed adjustment slider to control the car’s movement speed.
+📌 Central Core Area
+Real-time Video Window: Displays the car’s camera feed, ensuring clear and smooth visuals in a HUD-style design.
+Decorative Elements: Ancient mystical runes in the four corners to enhance immersion.
+📌 Bottom Interaction Area
+🎤 Voice Button: Activates voice recognition for controlling the car and camera.
+📜 Chat Input Box: Users can enter text commands to interact with the car, styled as an ancient magic scroll.
+5. Thematic Style (Inspired by The Legend of Zelda)
+📌 Visual Style
+Color Scheme: Uses mystical blue, bronze, and gold, blending ancient technology with magic elements.
+Border Design: Ancient stone carvings with faint glowing rune effects, similar to the control towers in The Legend of Zelda: Tears of the Kingdom.
+Button Style: Ancient rune-style buttons with soft glowing animations upon clicking.
+Background Texture: Can include low-contrast temple murals to add depth and layering to the interface.
