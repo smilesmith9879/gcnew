@@ -41,7 +41,7 @@ class Config:
     # AI assistant settings
     AI_ENABLED = os.environ.get('AI_ENABLED', 'True').lower() in ('true', '1', 't')
     OLLAMA_URL = os.environ.get('OLLAMA_URL', 'http://localhost:11434')
-    OLLAMA_MODEL = os.environ.get('OLLAMA_MODEL', 'deepseek-r1:1.7b')
+    OLLAMA_MODEL = os.environ.get('OLLAMA_MODEL', 'deepseek-r1:1.5b')
     
     # WebRTC settings
     WEBRTC_ENABLED = os.environ.get('WEBRTC_ENABLED', 'True').lower() in ('true', '1', 't')
