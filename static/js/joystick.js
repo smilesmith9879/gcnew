@@ -220,7 +220,7 @@ function handleCameraJoystick(x, y) {
     // X: -45 to 45 degrees (horizontal)
     // Y: -10 to 30 degrees (vertical)
     const horizontalAngle = Math.round(x * 45);
-    const verticalAngle = Math.round(y * 20);
+    const verticalAngle = Math.round(y * 45);
     
     // Update angle display
     document.getElementById('horizontal-angle').textContent = horizontalAngle + '°';

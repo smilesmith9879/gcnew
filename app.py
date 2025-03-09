@@ -14,6 +14,7 @@ from config import Config
 from camera import Camera
 from voice import VoiceRecognition
 from ai_assistant import AIAssistant
+from speech import TextToSpeech
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, 
@@ -56,6 +57,14 @@ try:
 except Exception as e:
     logger.error(f"Failed to initialize AI assistant: {e}")
     ai_assistant = None
+
+# Initialize text-to-speech
+try:
+    tts = TextToSpeech()
+    logger.info("Text-to-speech initialized successfully")
+except Exception as e:
+    logger.error(f"Failed to initialize text-to-speech: {e}")
+    tts = None
 
 # Global variables
 current_speed = 50  # Default speed (0-100)
@@ -234,6 +243,7 @@ def handle_voice_command(data):
             if text:
                 # Process the recognized text with AI assistant
                 response = ai_assistant.process_command(text)
+                response_text = response.get('text', '')
                 
                 # Execute command if applicable
                 if 'command' in response:
@@ -246,10 +256,15 @@ def handle_voice_command(data):
                             'vertical': command.get('vertical', 0)
                         })
                 
+                # Use text-to-speech to speak the response
+                if tts:
+                    tts.speak(response_text)
+                
                 emit('voice_response', {
                     'success': True,
                     'text': text,
-                    'response': response.get('text', '')
+                    'response': response_text,
+                    'tts_available': tts is not None
                 })
             else:
                 emit('voice_response', {'success': False, 'message': 'Could not recognize speech'})
@@ -271,6 +286,7 @@ def handle_text_command(data):
         if text:
             # Process the text with AI assistant
             response = ai_assistant.process_command(text)
+            response_text = response.get('text', '')
             
             # Execute command if applicable
             if 'command' in response:
@@ -283,15 +299,37 @@ def handle_text_command(data):
                         'vertical': command.get('vertical', 0)
                     })
             
+            # Use text-to-speech to speak the response
+            if tts:
+                tts.speak(response_text)
+            
             emit('text_response', {
                 'success': True,
-                'response': response.get('text', '')
+                'response': response_text,
+                'tts_available': tts is not None
             })
         else:
             emit('text_response', {'success': False, 'message': 'No text received'})
     except Exception as e:
         logger.error(f"Text command error: {e}")
         emit('error', {'message': f'Text command error: {str(e)}'})
+
+# Add a new endpoint to toggle text-to-speech
+@socketio.on('toggle_tts')
+def handle_toggle_tts(data):
+    """Toggle text-to-speech on/off."""
+    enabled = data.get('enabled', True)
+    message = "Text-to-speech enabled" if enabled else "Text-to-speech disabled"
+    
+    # Here you could store the state in a global variable if needed
+    # global tts_enabled
+    # tts_enabled = enabled
+    
+    emit('tts_status', {
+        'success': True,
+        'enabled': enabled,
+        'message': message
+    })
 
 if __name__ == '__main__':
     try:

@@ -15,6 +15,7 @@ const sendButton = document.getElementById('send-button');
 const voiceButton = document.getElementById('voice-button');
 const chatMessages = document.getElementById('chat-messages');
 const voiceIndicator = document.getElementById('voice-indicator');
+const ttsButton = document.getElementById('tts-button');
 
 // Status elements
 const robotStatus = document.getElementById('robot-status');
@@ -30,6 +31,7 @@ let isChatVisible = false;
 let isRecording = false;
 let mediaRecorder = null;
 let audioChunks = [];
+let ttsEnabled = true;
 
 // Initialize the application
 document.addEventListener('DOMContentLoaded', () => {
@@ -70,6 +72,9 @@ function setupEventListeners() {
     
     // Voice button
     voiceButton.addEventListener('click', toggleVoiceRecording);
+    
+    // TTS button
+    ttsButton.addEventListener('click', toggleTTS);
     
     // Chat messages toggle
     chatInput.addEventListener('focus', () => {
@@ -139,6 +144,14 @@ function setupSocketEvents() {
             addMessage('system', data.response);
         } else {
             addMessage('system', data.message || 'Error processing text command');
+        }
+    });
+    
+    // TTS status events
+    socket.on('tts_status', (data) => {
+        console.log('TTS status:', data);
+        if (data.success) {
+            addMessage('system', data.message);
         }
     });
     
@@ -276,7 +289,13 @@ function toggleVoiceRecording() {
     if (isRecording) {
         stopRecording();
     } else {
-        startRecording();
+        // Show a notification to the user about the microphone permission
+        addMessage('system', 'Please allow microphone access when prompted');
+        
+        // Add a small delay before requesting permission to ensure the message is seen
+        setTimeout(() => {
+            startRecording();
+        }, 500);
     }
 }
 
@@ -317,9 +336,15 @@ function startRecording() {
         } 
     };
     
+    // Show a visual indicator that we're trying to access the microphone
+    voiceButton.classList.add('requesting');
+    
     navigator.mediaDevices.getUserMedia(constraints)
         .then(stream => {
             isRecording = true;
+            
+            // Hide the requesting indicator
+            voiceButton.classList.remove('requesting');
             
             // Show recording indicator
             voiceIndicator.classList.add('active');
@@ -381,7 +406,18 @@ function startRecording() {
         })
         .catch(error => {
             console.error('Error accessing microphone:', error);
-            addMessage('system', 'Error accessing microphone. Please check your browser permissions and try again.');
+            
+            // Hide the requesting indicator
+            voiceButton.classList.remove('requesting');
+            
+            // Show a more user-friendly error message with instructions
+            if (error.name === 'NotAllowedError' || error.name === 'PermissionDeniedError') {
+                addMessage('system', 'Microphone access was denied. Please check your browser settings and ensure microphone access is allowed for this site.');
+            } else if (error.name === 'NotFoundError' || error.name === 'DevicesNotFoundError') {
+                addMessage('system', 'No microphone found. Please connect a microphone and try again.');
+            } else {
+                addMessage('system', 'Error accessing microphone. Please check your browser permissions and try again.');
+            }
         });
 }
 
@@ -392,6 +428,21 @@ function stopRecording() {
     if (mediaRecorder.state === 'recording') {
         mediaRecorder.stop();
     }
+}
+
+// Toggle text-to-speech
+function toggleTTS() {
+    ttsEnabled = !ttsEnabled;
+    
+    // Update button appearance
+    if (ttsEnabled) {
+        ttsButton.classList.add('active');
+    } else {
+        ttsButton.classList.remove('active');
+    }
+    
+    // Send toggle to server
+    socket.emit('toggle_tts', { enabled: ttsEnabled });
 }
 
 // Handle window unload
