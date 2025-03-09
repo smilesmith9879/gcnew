@@ -89,14 +89,20 @@ def announce_ai_ready():
     ready_message = "Hello, I am ready."
     logger.info("Announcing AI ready: " + ready_message)
     
-    # Speak the ready message
+    # Speak the ready message (with is_announcement=True)
     if tts:
-        tts.speak(ready_message, is_announcement=True)
+        try:
+            tts.speak(ready_message, is_announcement=True)
+        except Exception as e:
+            logger.error(f"Error announcing AI ready via speech: {e}")
     
     # Send the ready message to all connected clients
-    socketio.emit('ai_ready', {
-        'message': ready_message
-    })
+    try:
+        socketio.emit('ai_ready', {
+            'message': ready_message
+        })
+    except Exception as e:
+        logger.error(f"Error sending AI ready event: {e}")
 
 # Function to periodically check if AI is ready
 def check_ai_ready_task():
@@ -326,32 +332,46 @@ def handle_voice_command(data):
         # Process the recognized text with AI assistant
         response = ai_assistant.process_command(text)
         
-        # Handle case where response is None
-        if response is None:
-            logger.error("AI assistant returned None response")
-            emit('voice_response', {'success': False, 'message': 'AI assistant returned no response'})
+        # Response should always be a dict now due to our improvements in the AI assistant
+        # But let's add a safety check just in case
+        if not response or not isinstance(response, dict):
+            logger.error(f"AI assistant returned unexpected response type: {type(response)}")
+            emit('voice_response', {'success': False, 'message': 'AI assistant returned an invalid response'})
             return
         
         response_text = response.get('text', '')
+        if not response_text:
+            logger.warning("AI response contained no text")
+            response_text = "I processed your request but didn't generate a proper response."
+            
         logger.info(f"AI assistant response: {response_text[:100]}...")
         
         # Execute command if applicable
         if 'command' in response:
             command = response['command']
-            logger.info(f"Executing command: {command}")
+            logger.info(f"Executing command from voice: {command}")
             
-            if command.get('type') == 'movement':
-                handle_movement({'direction': command.get('direction')})
-            elif command.get('type') == 'camera':
-                handle_camera_control({
-                    'horizontal': command.get('horizontal', 0),
-                    'vertical': command.get('vertical', 0)
-                })
+            try:
+                if command and isinstance(command, dict) and 'type' in command:
+                    if command.get('type') == 'movement':
+                        handle_movement({'direction': command.get('direction')})
+                    elif command.get('type') == 'camera':
+                        handle_camera_control({
+                            'horizontal': command.get('horizontal', 0),
+                            'vertical': command.get('vertical', 0)
+                        })
+                else:
+                    logger.warning(f"Invalid command format: {command}")
+            except Exception as cmd_err:
+                logger.error(f"Error executing command: {cmd_err}")
         
         # Use text-to-speech to speak the response
         if tts and response_text:
-            logger.info("Converting response to speech")
-            tts.speak(response_text)
+            try:
+                logger.info("Converting response to speech")
+                tts.speak(response_text)
+            except Exception as tts_err:
+                logger.error(f"Error using text-to-speech: {tts_err}")
         
         emit('voice_response', {
             'success': True,
@@ -372,42 +392,60 @@ def handle_text_command(data):
     
     try:
         text = data.get('text')
-        if text:
-            # Process the text with AI assistant
-            response = ai_assistant.process_command(text)
-            
-            # Handle case where response is None
-            if response is None:
-                logger.error("AI assistant returned None response")
-                emit('text_response', {'success': False, 'message': 'AI assistant returned no response'})
-                return
-            
-            response_text = response.get('text', '')
-            
-            # Execute command if applicable
-            if 'command' in response:
-                command = response['command']
-                if command.get('type') == 'movement':
-                    handle_movement({'direction': command.get('direction')})
-                elif command.get('type') == 'camera':
-                    handle_camera_control({
-                        'horizontal': command.get('horizontal', 0),
-                        'vertical': command.get('vertical', 0)
-                    })
-            
-            # Use text-to-speech to speak the response
-            if tts and response_text:
-                tts.speak(response_text)
-            
-            emit('text_response', {
-                'success': True,
-                'response': response_text,
-                'tts_available': tts is not None
-            })
-        else:
+        if not text:
             emit('text_response', {'success': False, 'message': 'No text received'})
+            return
+            
+        logger.info(f"Processing text command: {text}")
+        
+        # Process the text with AI assistant
+        response = ai_assistant.process_command(text)
+        
+        # Response should always be a dict now due to our improvements in the AI assistant
+        # But let's add a safety check just in case
+        if not response or not isinstance(response, dict):
+            logger.error(f"AI assistant returned unexpected response type: {type(response)}")
+            emit('text_response', {'success': False, 'message': 'AI assistant returned an invalid response'})
+            return
+        
+        response_text = response.get('text', '')
+        if not response_text:
+            logger.warning("AI response contained no text")
+            response_text = "I processed your request but didn't generate a proper response."
+        
+        # Execute command if applicable
+        if 'command' in response:
+            command = response['command']
+            logger.info(f"Executing command from text input: {command}")
+            
+            try:
+                if command and isinstance(command, dict) and 'type' in command:
+                    if command.get('type') == 'movement':
+                        handle_movement({'direction': command.get('direction')})
+                    elif command.get('type') == 'camera':
+                        handle_camera_control({
+                            'horizontal': command.get('horizontal', 0),
+                            'vertical': command.get('vertical', 0)
+                        })
+                else:
+                    logger.warning(f"Invalid command format: {command}")
+            except Exception as cmd_err:
+                logger.error(f"Error executing command: {cmd_err}")
+        
+        # Use text-to-speech to speak the response
+        if tts and response_text:
+            try:
+                tts.speak(response_text)
+            except Exception as tts_err:
+                logger.error(f"Error using text-to-speech: {tts_err}")
+        
+        emit('text_response', {
+            'success': True,
+            'response': response_text,
+            'tts_available': tts is not None
+        })
     except Exception as e:
-        logger.error(f"Text command error: {e}")
+        logger.error(f"Text command error: {e}", exc_info=True)
         emit('error', {'message': f'Text command error: {str(e)}'})
 
 # Add a new endpoint to toggle text-to-speech

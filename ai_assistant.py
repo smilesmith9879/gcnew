@@ -78,6 +78,10 @@ class AIAssistant:
         Returns:
             dict: Response containing text and optional command
         """
+        if not text or not isinstance(text, str):
+            logger.error(f"Invalid input text: {text}")
+            return {"text": "I'm sorry, I received an invalid command."}
+        
         try:
             # Prepare the prompt for the AI model
             system_prompt = """
@@ -95,38 +99,67 @@ class AIAssistant:
             
             # Call the Ollama API
             start_time = time.time()
-            response = requests.post(
-                f"{self.config.OLLAMA_URL}/api/generate",
-                json={
-                    "model": self.config.OLLAMA_MODEL,
-                    "prompt": prompt,
-                    "system": system_prompt,
-                    "format": "json",
-                    "stream": False
-                }
-            )
-            processing_time = time.time() - start_time
-            
-            if response.status_code != 200:
-                logger.error(f"Ollama API error: {response.status_code} - {response.text}")
-                return {"text": "I'm sorry, I encountered an error processing your request."}
-            
-            # Parse the response
-            result = response.json()
-            response_text = result.get("response", "")
-            
-            # Try to parse the JSON response
             try:
-                parsed_response = json.loads(response_text)
-                logger.info(f"AI processed command in {processing_time:.2f}s")
-                return parsed_response
-            except json.JSONDecodeError:
-                # If not valid JSON, just return the text
-                logger.warning(f"AI response was not valid JSON: {response_text}")
-                return {"text": response_text}
+                response = requests.post(
+                    f"{self.config.OLLAMA_URL}/api/generate",
+                    json={
+                        "model": self.config.OLLAMA_MODEL,
+                        "prompt": prompt,
+                        "system": system_prompt,
+                        "format": "json",
+                        "stream": False
+                    },
+                    timeout=30  # Add timeout to prevent hanging
+                )
+                processing_time = time.time() - start_time
+                
+                if response.status_code != 200:
+                    logger.error(f"Ollama API error: {response.status_code} - {response.text}")
+                    return {"text": "I'm sorry, I encountered an error processing your request."}
+                
+                # Parse the response
+                result = response.json()
+                response_text = result.get("response", "")
+                
+                if not response_text:
+                    logger.error("Empty response from Ollama API")
+                    return {"text": "I'm sorry, I didn't generate a proper response. Please try again."}
+                    
+                # Try to parse the JSON response
+                try:
+                    # Remove any excess characters before or after the JSON object
+                    # Sometimes the model outputs explanatory text before/after the JSON
+                    json_start = response_text.find('{')
+                    json_end = response_text.rfind('}') + 1
+                    
+                    if json_start >= 0 and json_end > json_start:
+                        clean_json = response_text[json_start:json_end]
+                        parsed_response = json.loads(clean_json)
+                    else:
+                        # If no JSON object was found, treat as plain text
+                        parsed_response = {"text": response_text}
+                    
+                    # Ensure the response has a text field
+                    if "text" not in parsed_response or not parsed_response["text"]:
+                        parsed_response["text"] = "I processed your request, but didn't generate a proper response."
+                    
+                    logger.info(f"AI processed command in {processing_time:.2f}s")
+                    return parsed_response
+                except json.JSONDecodeError as json_err:
+                    # If JSON parsing fails, return the raw text
+                    logger.warning(f"AI response was not valid JSON: {response_text}")
+                    logger.warning(f"JSON parsing error: {json_err}")
+                    return {"text": response_text if response_text else "I processed your request, but couldn't structure my response properly."}
+                
+            except requests.exceptions.Timeout:
+                logger.error("Ollama API request timed out")
+                return {"text": "I'm sorry, the request timed out. Please try again."}
+            except requests.exceptions.RequestException as req_err:
+                logger.error(f"Request error: {req_err}")
+                return {"text": "I'm sorry, there was a network error processing your request."}
         
         except Exception as e:
-            logger.error(f"Error processing command: {e}")
+            logger.error(f"Error processing command: {e}", exc_info=True)
             return {"text": "I'm sorry, I encountered an error processing your request."}
 
 # For testing the AI assistant module directly
