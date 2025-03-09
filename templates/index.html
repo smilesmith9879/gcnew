@@ -22,21 +22,7 @@
 
         <!-- Main content area -->
         <main class="main-content">
-            <!-- Left joystick for car movement -->
-            <div class="control-section left-control">
-                <h2>Movement</h2>
-                <div class="joystick-container" id="movement-joystick">
-                    <div class="joystick-base">
-                        <div class="joystick-handle"></div>
-                    </div>
-                </div>
-                <div class="speed-control">
-                    <label for="speed-slider">Speed: <span id="speed-value">50</span>%</label>
-                    <input type="range" id="speed-slider" min="0" max="100" value="50">
-                </div>
-            </div>
-
-            <!-- Center video feed -->
+            <!-- Video feed at the top -->
             <div class="video-section">
                 <div class="video-container">
                     <img id="video-feed" src="{{ url_for('static', filename='img/placeholder.jpg') }}" alt="Camera Feed">
@@ -49,16 +35,20 @@
                 </div>
             </div>
 
-            <!-- Right joystick for camera control -->
-            <div class="control-section right-control">
-                <h2>Camera</h2>
-                <div class="joystick-container" id="camera-joystick">
+            <!-- Joystick controls in one row -->
+            <div class="joysticks-row">
+                <!-- Left joystick for car movement -->
+                <div class="joystick-container" id="movement-joystick">
                     <div class="joystick-base">
                         <div class="joystick-handle"></div>
                     </div>
                 </div>
-                <div class="camera-info">
-                    <div>H: <span id="horizontal-angle">0°</span> V: <span id="vertical-angle">0°</span></div>
+                
+                <!-- Right joystick for camera control -->
+                <div class="joystick-container" id="camera-joystick">
+                    <div class="joystick-base">
+                        <div class="joystick-handle"></div>
+                    </div>
                 </div>
             </div>
         </main>
@@ -115,6 +105,17 @@
                     <button id="request-permission-button" class="action-button">
                         <i class="fas fa-microphone"></i> Request Microphone Access
                     </button>
+                </div>
+                
+                <div class="setting-section">
+                    <h3>Car Control Settings</h3>
+                    <div class="car-settings">
+                        <div class="setting-group">
+                            <label for="speed-slider">Car Speed:</label>
+                            <input type="range" id="speed-slider" min="0" max="100" value="50" class="settings-slider">
+                            <span id="speed-value">50%</span>
+                        </div>
+                    </div>
                 </div>
                 
                 <div class="setting-section">

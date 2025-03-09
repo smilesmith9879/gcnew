@@ -70,6 +70,11 @@ function initializeApp() {
     // Initialize socket events
     setupSocketEvents();
     
+    // Initialize joysticks
+    if (typeof window.initializeJoysticks === 'function') {
+        window.initializeJoysticks();
+    }
+    
     // Get initial status
     fetchStatus();
     
@@ -90,7 +95,7 @@ function initializeApp() {
 
 // Set up event listeners
 function setupEventListeners() {
-    // Speed slider
+    // Speed slider - now in settings modal
     speedSlider.addEventListener('input', handleSpeedChange);
     
     // Chat input

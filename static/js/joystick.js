@@ -3,6 +3,21 @@
  * Joystick Controller
  */
 
+// Joystick parameters
+const JOYSTICK_UPDATE_INTERVAL = 100; // Send commands every 100ms
+const DEAD_ZONE = 0.1; // 10% dead zone - we don't move until beyond this
+
+// Joystick state
+let movementJoystickActive = false;
+let cameraJoystickActive = false;
+let movementJoystickX = 0;
+let movementJoystickY = 0;
+let cameraJoystickX = 0;
+let cameraJoystickY = 0;
+let lastDirection = '';
+let movementIntervalId = null;
+let cameraIntervalId = null;
+
 // Initialize joysticks when DOM is loaded
 document.addEventListener('DOMContentLoaded', () => {
     // Initialize movement joystick
@@ -231,4 +246,234 @@ function handleCameraJoystick(x, y) {
         horizontal: horizontalAngle,
         vertical: verticalAngle
     });
-} 
+}
+
+// Initialize joysticks
+function initializeJoysticks() {
+    // Get DOM elements
+    const movementJoystick = document.getElementById('movement-joystick');
+    const movementBase = movementJoystick.querySelector('.joystick-base');
+    const movementHandle = movementJoystick.querySelector('.joystick-handle');
+    
+    const cameraJoystick = document.getElementById('camera-joystick');
+    const cameraBase = cameraJoystick.querySelector('.joystick-base');
+    const cameraHandle = cameraJoystick.querySelector('.joystick-handle');
+    
+    // Set up movement joystick events
+    setupJoystick(movementJoystick, movementBase, movementHandle, 
+        (x, y) => { // move callback
+            movementJoystickActive = true;
+            movementJoystickX = x;
+            movementJoystickY = y;
+            
+            if (!movementIntervalId) {
+                movementIntervalId = setInterval(sendMovementCommand, JOYSTICK_UPDATE_INTERVAL);
+            }
+        },
+        () => { // release callback
+            movementJoystickActive = false;
+            movementJoystickX = 0;
+            movementJoystickY = 0;
+            
+            // Send stop command
+            sendMovementCommand('stop');
+            
+            // Clear interval after stopping
+            if (movementIntervalId) {
+                clearInterval(movementIntervalId);
+                movementIntervalId = null;
+            }
+        }
+    );
+    
+    // Set up camera joystick events
+    setupJoystick(cameraJoystick, cameraBase, cameraHandle, 
+        (x, y) => { // move callback
+            cameraJoystickActive = true;
+            cameraJoystickX = x;
+            cameraJoystickY = y;
+            
+            if (!cameraIntervalId) {
+                cameraIntervalId = setInterval(sendCameraCommand, JOYSTICK_UPDATE_INTERVAL);
+            }
+        },
+        () => { // release callback
+            cameraJoystickActive = false;
+            cameraJoystickX = 0;
+            cameraJoystickY = 0;
+            
+            // Clear interval
+            if (cameraIntervalId) {
+                clearInterval(cameraIntervalId);
+                cameraIntervalId = null;
+            }
+        }
+    );
+}
+
+// Set up joystick events - works for both touch and mouse
+function setupJoystick(joystickElement, baseElement, handleElement, moveCallback, releaseCallback) {
+    const baseRect = baseElement.getBoundingClientRect();
+    const baseRadius = baseRect.width / 2;
+    const handleRadius = handleElement.offsetWidth / 2;
+    const maxDistance = baseRadius - handleRadius;
+    
+    let isDragging = false;
+    
+    // Get the center point of the joystick base
+    function getBaseCenter() {
+        const rect = baseElement.getBoundingClientRect();
+        return {
+            x: rect.left + rect.width / 2,
+            y: rect.top + rect.height / 2
+        };
+    }
+    
+    // Calculate joystick position and process movement
+    function processJoystickPosition(clientX, clientY) {
+        const center = getBaseCenter();
+        
+        // Calculate the distance from center
+        let deltaX = clientX - center.x;
+        let deltaY = clientY - center.y;
+        
+        // Calculate the distance from center (Pythagorean theorem)
+        const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+        
+        // Normalize to -1 to 1 range
+        let normalizedX = deltaX / maxDistance;
+        let normalizedY = deltaY / maxDistance;
+        
+        // If outside the max distance, scale back
+        if (distance > maxDistance) {
+            normalizedX = (normalizedX * maxDistance) / distance;
+            normalizedY = (normalizedY * maxDistance) / distance;
+            
+            // Recalculate deltaX and deltaY for handle positioning
+            deltaX = normalizedX * maxDistance;
+            deltaY = normalizedY * maxDistance;
+        }
+        
+        // Apply dead zone
+        if (Math.abs(normalizedX) < DEAD_ZONE) normalizedX = 0;
+        if (Math.abs(normalizedY) < DEAD_ZONE) normalizedY = 0;
+        
+        // Move handle
+        handleElement.style.transform = `translate(${deltaX}px, ${deltaY}px)`;
+        
+        // Call the move callback with normalized coordinates
+        moveCallback(normalizedX, normalizedY);
+    }
+    
+    // Mouse events
+    joystickElement.addEventListener('mousedown', (e) => {
+        e.preventDefault();
+        isDragging = true;
+        processJoystickPosition(e.clientX, e.clientY);
+    });
+    
+    document.addEventListener('mousemove', (e) => {
+        if (isDragging) {
+            e.preventDefault();
+            processJoystickPosition(e.clientX, e.clientY);
+        }
+    });
+    
+    document.addEventListener('mouseup', () => {
+        if (isDragging) {
+            isDragging = false;
+            handleElement.style.transform = 'translate(0px, 0px)';
+            releaseCallback();
+        }
+    });
+    
+    // Touch events for mobile
+    joystickElement.addEventListener('touchstart', (e) => {
+        e.preventDefault();
+        isDragging = true;
+        processJoystickPosition(e.touches[0].clientX, e.touches[0].clientY);
+    }, { passive: false });
+    
+    document.addEventListener('touchmove', (e) => {
+        if (isDragging) {
+            e.preventDefault();
+            processJoystickPosition(e.touches[0].clientX, e.touches[0].clientY);
+        }
+    }, { passive: false });
+    
+    document.addEventListener('touchend', () => {
+        if (isDragging) {
+            isDragging = false;
+            handleElement.style.transform = 'translate(0px, 0px)';
+            releaseCallback();
+        }
+    });
+    
+    // Safari specific fixes
+    joystickElement.addEventListener('touchcancel', () => {
+        if (isDragging) {
+            isDragging = false;
+            handleElement.style.transform = 'translate(0px, 0px)';
+            releaseCallback();
+        }
+    });
+}
+
+// Send movement command based on joystick position
+function sendMovementCommand(overrideDirection = null) {
+    if (!movementJoystickActive && !overrideDirection) return;
+    
+    let direction;
+    
+    if (overrideDirection) {
+        direction = overrideDirection;
+    } else {
+        // Calculate movement direction based on joystick position
+        const x = movementJoystickX;
+        const y = -movementJoystickY; // Invert Y so up is positive
+        
+        if (Math.abs(x) < DEAD_ZONE && Math.abs(y) < DEAD_ZONE) {
+            direction = 'stop';
+        } else if (Math.abs(y) > Math.abs(x)) {
+            // More vertical than horizontal movement
+            if (y > 0) {
+                // Forward
+                if (x > 0.5) direction = 'forwardRight';
+                else if (x < -0.5) direction = 'forwardLeft';
+                else direction = 'forward';
+            } else {
+                // Backward
+                if (x > 0.5) direction = 'backwardRight';
+                else if (x < -0.5) direction = 'backwardLeft';
+                else direction = 'backward';
+            }
+        } else {
+            // More horizontal than vertical movement
+            if (x > 0) direction = 'right';
+            else direction = 'left';
+        }
+    }
+    
+    // Only send if different from last direction
+    if (direction !== lastDirection) {
+        lastDirection = direction;
+        socket.emit('movement', { direction });
+    }
+}
+
+// Send camera control commands
+function sendCameraCommand() {
+    if (!cameraJoystickActive) return;
+    
+    // Map joystick position to camera angles
+    const horizontalAngle = Math.round(cameraJoystickX * 45); // -45 to 45 degrees
+    const verticalAngle = Math.round(-cameraJoystickY * 20); // -20 to 20 degrees
+    
+    socket.emit('camera_control', {
+        horizontal: horizontalAngle,
+        vertical: verticalAngle
+    });
+}
+
+// Export functions
+window.initializeJoysticks = initializeJoysticks; 
