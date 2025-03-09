@@ -296,7 +296,7 @@ def handle_text_command(data):
 if __name__ == '__main__':
     try:
         # Start the Flask-SocketIO server
-        socketio.run(app, host='0.0.0.0', port=5000, debug=True, allow_unsafe_werkzeug=True)
+        socketio.run(app, host='0.0.0.0', port=5000, debug=False, allow_unsafe_werkzeug=True)
     except KeyboardInterrupt:
         logger.info("Server shutting down...")
         if robot:

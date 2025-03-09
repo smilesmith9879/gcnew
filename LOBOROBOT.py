@@ -10,7 +10,7 @@
 
 import time
 import math
-import smbus
+import smbus2 as smbus
 from gpiozero import LED
 
 Dir = [

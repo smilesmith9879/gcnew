@@ -284,14 +284,40 @@ function toggleVoiceRecording() {
 function startRecording() {
     if (isRecording) return;
     
-    // Check if browser supports getUserMedia
-    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-        addMessage('system', 'Voice recording is not supported in this browser');
-        return;
+    // Check if browser supports getUserMedia with better compatibility
+    if (!navigator.mediaDevices) {
+        // Try to use older browser APIs as fallback
+        navigator.mediaDevices = {};
     }
     
-    // Request microphone access
-    navigator.mediaDevices.getUserMedia({ audio: true })
+    if (!navigator.mediaDevices.getUserMedia) {
+        navigator.mediaDevices.getUserMedia = function(constraints) {
+            // First, try the older vendor-prefixed versions
+            const getUserMedia = navigator.webkitGetUserMedia || navigator.mozGetUserMedia || navigator.msGetUserMedia;
+            
+            // If no prefixed versions exist, reject with error
+            if (!getUserMedia) {
+                addMessage('system', 'Voice recording is not supported in this browser');
+                return Promise.reject(new Error('getUserMedia is not implemented in this browser'));
+            }
+            
+            // Otherwise, wrap the old API with a Promise
+            return new Promise(function(resolve, reject) {
+                getUserMedia.call(navigator, constraints, resolve, reject);
+            });
+        };
+    }
+    
+    // Request microphone access with more specific constraints
+    const constraints = { 
+        audio: {
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: true
+        } 
+    };
+    
+    navigator.mediaDevices.getUserMedia(constraints)
         .then(stream => {
             isRecording = true;
             
@@ -299,8 +325,15 @@ function startRecording() {
             voiceIndicator.classList.add('active');
             voiceButton.style.backgroundColor = '#f44336';
             
-            // Create media recorder
-            mediaRecorder = new MediaRecorder(stream);
+            // Create media recorder with broader format support
+            const options = { mimeType: 'audio/webm' };
+            try {
+                mediaRecorder = new MediaRecorder(stream, options);
+            } catch (e) {
+                // Fallback to default format if webm is not supported
+                mediaRecorder = new MediaRecorder(stream);
+            }
+            
             audioChunks = [];
             
             // Handle data available event
@@ -311,20 +344,21 @@ function startRecording() {
             // Handle recording stop event
             mediaRecorder.onstop = () => {
                 // Convert audio chunks to blob
-                const audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
+                const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
                 
                 // Convert blob to base64
-                const reader = new FileReader();
-                reader.readAsDataURL(audioBlob);
-                reader.onloadend = () => {
-                    const base64Audio = reader.result.split(',')[1];
-                    
-                    // Send audio to server
-                    socket.emit('voice_command', { audio: base64Audio });
-                    
-                    // Add user message to chat
-                    addMessage('user', '🎤 Voice command sent');
-                };
+                audioToBase64(audioBlob)
+                    .then(base64Audio => {
+                        // Send audio to server
+                        socket.emit('voice_command', { audio: base64Audio });
+                        
+                        // Add user message to chat
+                        addMessage('user', '🎤 Voice command sent');
+                    })
+                    .catch(error => {
+                        console.error('Error converting audio to base64:', error);
+                        addMessage('system', 'Error processing audio: ' + error.message);
+                    });
                 
                 // Reset recording state
                 isRecording = false;
@@ -347,7 +381,7 @@ function startRecording() {
         })
         .catch(error => {
             console.error('Error accessing microphone:', error);
-            addMessage('system', 'Error accessing microphone: ' + error.message);
+            addMessage('system', 'Error accessing microphone. Please check your browser permissions and try again.');
         });
 }
 
