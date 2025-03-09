@@ -31,7 +31,7 @@ body {
     background-position: center;
     background-attachment: fixed;
     min-height: 100vh;
-    overflow: hidden;
+    overflow-x: hidden; /* Changed from overflow: hidden to allow vertical scrolling if needed */
 }
 
 .container {
@@ -48,7 +48,7 @@ body {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 1rem 0;
+    padding: 0.8rem 0;
     position: relative;
 }
 
@@ -83,7 +83,7 @@ body {
     display: flex;
     justify-content: space-between;
     flex-grow: 1;
-    gap: 1rem;
+    gap: 0.8rem;
     margin-bottom: 1rem;
 }
 
@@ -207,7 +207,7 @@ body {
 .video-container {
     width: 100%;
     height: 0;
-    padding-bottom: 70%;
+    padding-bottom: 75%; /* Increased from 70% for better aspect ratio */
     position: relative;
     background-color: rgba(26, 42, 58, 0.8);
     border: 2px solid var(--border-color);
@@ -937,21 +937,22 @@ body {
     }
 }
 
-/* Responsive adjustments */
+/* Mobile and tablet responsive styles */
 @media (max-width: 768px) {
     .container {
         padding: 0.5rem;
+        height: auto; /* Allow container to expand based on content */
     }
     
     .main-content {
         flex-direction: column;
-        gap: 0.3rem;
-        margin-bottom: 70px; /* Make room for fixed footer */
+        gap: 0.5rem; /* Increased from 0.3rem to reduce tightness */
+        margin-bottom: 80px; /* Make room for fixed footer */
     }
     
     .control-section, .video-section {
         width: 100%;
-        margin-bottom: 0.3rem;
+        margin-bottom: 0.5rem; /* Increased from 0.3rem */
     }
     
     .video-section {
@@ -959,7 +960,7 @@ body {
     }
     
     .control-section {
-        padding: 0.4rem;
+        padding: 0.6rem; /* Increased from 0.4rem for better spacing */
         flex-direction: row;
         flex-wrap: wrap;
         justify-content: space-between;
@@ -967,23 +968,23 @@ body {
     
     .control-section h2 {
         width: 100%;
-        margin-bottom: 0.2rem;
+        margin-bottom: 0.3rem; /* Increased from 0.2rem */
         font-size: 1rem;
     }
     
     .joystick-container {
-        width: 80px;
-        height: 80px;
+        width: 100px; /* Increased from 80px */
+        height: 100px; /* Increased from 80px */
         margin: 0.2rem 0;
     }
     
     .speed-control, .camera-info {
-        width: calc(100% - 90px);
+        width: calc(100% - 110px); /* Adjusted for larger joystick */
         margin-top: 0.2rem;
     }
     
     .video-container {
-        padding-bottom: 40%; /* Reduced aspect ratio for mobile */
+        padding-bottom: 60%; /* Increased from 40% for larger video display */
         margin-bottom: 0.4rem;
     }
     
@@ -1035,9 +1036,12 @@ body {
         right: 5px;
     }
     
+    /* Modal adjustments */
     .modal-content {
-        margin: 15% auto;
+        margin: 10% auto; /* Reduced from 15% for better position */
         width: 95%;
+        max-height: 80vh; /* Add max height */
+        overflow-y: auto; /* Make modal scrollable */
     }
     
     .modal-header h2 {
@@ -1068,6 +1072,7 @@ body {
         padding: 10px;
     }
     
+    /* Test buttons in one column for mobile */
     .test-buttons {
         flex-direction: column;
         gap: 5px;
@@ -1080,11 +1085,11 @@ body {
     }
 }
 
-/* iPhone-specific adjustments */
+/* iPhone and small mobile specific adjustments */
 @media (max-width: 414px) {
     .joystick-container {
-        width: 70px;
-        height: 70px;
+        width: 85px; /* Increased from 70px */
+        height: 85px; /* Increased from 70px */
     }
     
     .voice-button {
@@ -1097,12 +1102,20 @@ body {
     }
     
     .speed-control, .camera-info {
-        width: calc(100% - 80px);
+        width: calc(100% - 95px); /* Adjusted for larger joystick */
         font-size: 0.9rem;
     }
     
     .video-container {
-        padding-bottom: 35%; /* Even shorter aspect ratio for iPhone */
+        padding-bottom: 56.25%; /* 16:9 aspect ratio for better video display */
+        margin: 0 -0.5rem; /* Negative margin to make video full width */
+        width: calc(100% + 1rem);
+        border-radius: 0; /* Remove border radius for full-width effect */
+    }
+    
+    .video-section {
+        padding: 0; /* Remove padding */
+        margin-bottom: 0.3rem;
     }
     
     .tts-button {
@@ -1127,7 +1140,8 @@ body {
     }
     
     .modal-content {
-        margin: 20% auto;
+        margin: 5% auto; /* Decreased for better positioning */
+        max-height: 90vh; /* Taller modal */
     }
     
     .modal-header h2 {
@@ -1154,5 +1168,67 @@ body {
     .language-select {
         font-size: 0.8rem;
         padding: 5px 6px;
+    }
+    
+    /* Optimize controls layout */
+    .control-section {
+        margin-bottom: 0.3rem;
+        padding: 0.4rem;
+        border-width: 1px; /* Thinner borders to save space */
+    }
+    
+    /* Make interaction area more compact */
+    .interaction-area {
+        padding: 0.4rem;
+    }
+}
+
+/* Very small screens (iPhone SE, etc.) */
+@media (max-width: 320px) {
+    .joystick-container {
+        width: 75px;
+        height: 75px;
+    }
+    
+    .speed-control, .camera-info {
+        width: calc(100% - 85px);
+        font-size: 0.8rem;
+    }
+    
+    .header h1 {
+        font-size: 0.9rem;
+    }
+    
+    .voice-button, .tts-button {
+        width: 38px;
+        height: 38px;
+    }
+    
+    .interaction-area {
+        padding: 0.3rem;
+    }
+}
+
+/* Landscape orientation for mobile */
+@media (max-width: 768px) and (orientation: landscape) {
+    .main-content {
+        flex-direction: row;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+        margin-bottom: 70px;
+    }
+    
+    .video-section {
+        width: 100%;
+        order: -1;
+    }
+    
+    .control-section {
+        width: calc(50% - 0.5rem);
+        margin-bottom: 0.3rem;
+    }
+    
+    .video-container {
+        padding-bottom: 40%; /* Lower height in landscape mode */
     }
 } 
